@@ -9,9 +9,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 import csv
 
-from datasets.wound_dataset import WoundDataset
-from models.unet.unet import UNet
-from utils.checkpoint import save_checkpoint, load_checkpoint
+from datasets import WoundDataset
+from models.unet import UNet
+from utils import save_checkpoint, load_checkpoint
 from metrics import dice_coeff
 
 
