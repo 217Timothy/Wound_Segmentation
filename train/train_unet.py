@@ -81,7 +81,7 @@ def main():
     # Resume (optional)
     # -----------------------------
     start_epoch = 0
-    best_dice = 0.0
+    best_dice: float = 0.0
 
     if os.path.exists(last_ckpt_path):
         print(f"[INFO] Resuming from {last_ckpt_path}")
@@ -119,8 +119,8 @@ def main():
         
         # === Validation (新增部分) ===
         model.eval()
-        val_loss = 0.0
-        val_dice_score = 0.0
+        val_loss: float = 0.0
+        val_dice_score: float = 0.0
         
         with torch.no_grad():
             for imgs, masks in val_loader:
@@ -133,7 +133,7 @@ def main():
                 
                 # Val Dice (呼叫 metrics/dice.py)
                 dice = dice_coeff(outputs, masks)
-                val_dice_score += dice
+                val_dice_score += dice.item()
         
         avg_val_loss = val_loss / len(val_loader)
         avg_val_dice = val_dice_score / len(val_loader)
