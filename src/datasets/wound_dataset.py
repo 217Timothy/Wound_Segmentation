@@ -42,8 +42,8 @@ class SegmentationDataset(Dataset):
             # 資料實際位置: data/processed/WoundSeg/train/images/WS_001.png
             base_path = os.path.join(self.root_dir, ds, split)
             for fname in fnames:
-                img_path = os.path.join(base_path, fname, "images")
-                mask_path = os.path.join(base_path, fname, "masks")
+                img_path = os.path.join(base_path, "images", fname)
+                mask_path = os.path.join(base_path, "masks", fname)
                 self.files.append((img_path, mask_path))
     
     

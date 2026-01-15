@@ -6,15 +6,14 @@ def get_train_transforms(img_size=(512, 512)):
         # 1. 隨機翻轉
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
+        A.Rotate(limit=30, p=0.5), # 隨機旋轉 +/- 30度
         
-        # 2. 隨機旋轉與縮放 (增加難度)
-        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=45, p=0.5),
+        # 2. 色彩變換 (只影響 Image，不影響 Mask)
+        # 傷口顏色很重要，所以我們輕微調整就好
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=15, val_shift_limit=10, p=0.3),
         
-        # 3. 亮度對比調整 (模擬不同光照)
-        A.RandomBrightnessContrast(p=0.2),
-        
-        # 注意：我們已經在前處理 resize 好了，所以這裡通常不需要再 Resize
-        # 但為了保險起見，可以加一個 Ensure Size
+        # 3. 確保尺寸 (雖然前處理做過了，但雙重保險是好習慣)
         A.Resize(height=img_size[1], width=img_size[0]),
         
         # 4. 轉 Tensor (這步會自動除以 255 並轉 CHW，如果在 Dataset 手寫了就不用這行)

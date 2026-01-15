@@ -1,1 +1,1 @@
-from .wound_dataset import WoundDataset
+from .wound_dataset import SegmentationDataset
