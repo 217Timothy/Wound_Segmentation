@@ -26,7 +26,7 @@ def validate(model, data_loader, loss_func, device):
     with torch.no_grad():
         loop = tqdm(data_loader, desc="Validating")
         
-        for batch_idx, (imgs, masks) in loop:
+        for batch_idx, (imgs, masks) in enumerate(loop):
             imgs = imgs.to(device)
             masks = masks.to(device)
             

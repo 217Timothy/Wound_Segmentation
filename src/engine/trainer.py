@@ -21,7 +21,7 @@ def train_one_epoch(model, data_loader, optimizer, loss_func, device, epoch):
     
     loop = tqdm(data_loader, desc=f"Training Epoch: {epoch}")
     
-    for batch_idx, (imgs, masks) in loop:
+    for batch_idx, (imgs, masks) in enumerate(loop):
         # 1. 把資料搬到 GPU
         imgs = imgs.to(device)
         masks = masks.to(device)
