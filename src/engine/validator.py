@@ -10,7 +10,7 @@ sys.path.append(root_dir)
 from src.metrics.dice import dice_coeff
 
 
-def validate(model, data_loader, loss_func, device):
+def validate(model, val_loader, loss_func, device):
     """
     執行驗證流程
     Returns:
@@ -24,7 +24,7 @@ def validate(model, data_loader, loss_func, device):
     running_dice = 0.0
     
     with torch.no_grad():
-        loop = tqdm(data_loader, desc="Validating")
+        loop = tqdm(val_loader, desc="Validating")
         
         for batch_idx, (imgs, masks) in enumerate(loop):
             imgs = imgs.to(device)
@@ -44,7 +44,7 @@ def validate(model, data_loader, loss_func, device):
             # 更新進度條
             loop.set_postfix(loss=loss.item(), dice=dice)
     
-    avg_loss = running_loss / len(data_loader)
-    avg_dice = running_dice / len(data_loader)
+    avg_loss = running_loss / len(val_loader)
+    avg_dice = running_dice / len(val_loader)
     
     return avg_loss, avg_dice

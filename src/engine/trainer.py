@@ -1,7 +1,7 @@
 import torch
 from tqdm import tqdm
 
-def train_one_epoch(model, data_loader, optimizer, loss_func, device, epoch):
+def train_one_epoch(model, train_loader, optimizer, loss_func, device, epoch):
     """
     執行一個 Epoch 的訓練
     Args:
@@ -19,7 +19,7 @@ def train_one_epoch(model, data_loader, optimizer, loss_func, device, epoch):
     
     running_loss = 0.0
     
-    loop = tqdm(data_loader, desc=f"Training Epoch: {epoch}")
+    loop = tqdm(train_loader, desc=f"Training Epoch: {epoch}")
     
     for batch_idx, (imgs, masks) in enumerate(loop):
         # 1. 把資料搬到 GPU
@@ -47,5 +47,5 @@ def train_one_epoch(model, data_loader, optimizer, loss_func, device, epoch):
         # 更新進度條後面的資訊 (即時看到 Loss 變化)
         loop.set_postfix(loss=loss.item())
     
-    epoch_loss = running_loss / len(data_loader)
+    epoch_loss = running_loss / len(train_loader)
     return epoch_loss

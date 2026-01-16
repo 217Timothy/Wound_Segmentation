@@ -117,7 +117,7 @@ def main():
         
         checkpoint = {
             "epoch": epoch,
-            "state_dice": model.state_dict(),
+            "state_dict": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "score": val_dice
         }
