@@ -16,37 +16,43 @@ sys.path.append(root_dir)
 
 from src.models.unet import UNet
 from src.engine import infer_one_image
-from src.utils import load_checkpoint, tensor_to_numpy, make_overlay, make_combine
+from src.utils import load_checkpoint, make_overlay, make_combine
 
 
 # ==========================================
 # 1. 設定參數與參數解析器 (Configuration and ArgParse)
 # ==========================================
 IMAGE_SIZE = 512
-RUN_NAME = "unet_v1"
-DELETE = True
 
 
 def get_args():
     parser = argparse.ArgumentParser(description="Inference on images using U-Net")
     
-    # 輸入與輸出路徑
-    parser.add_argument("--input", type=str, default="data/processed",
-                        help="輸入圖片的資料夾路徑")
-    parser.add_argument("--output", type=str, default="results",
-                        help="輸出結果的根目錄")
-    parser.add_argument("--checkpoint", type=str, default=f"checkpoints/{RUN_NAME}/best.pt",
-                        help="模型權重檔路徑 (.pt)")
-    
-    # 其他設定
+    # 必要參數：模型版本與資料集
+    parser.add_argument("--version", type=str, required=True,
+                        help="要使用的模型版本")
+    parser.add_argument("--run_name", type=str, required=True,
+                        help="第幾次跑")
     parser.add_argument("--dataset", type=str, required=True,
                         help="資料集名稱")
+    
+    # 輸入與輸出根目錄
+    parser.add_argument("--in_root", type=str, default="data/processed",
+                        help="輸入圖片的資料夾路徑")
+    parser.add_argument("--out_root", type=str, default="results",
+                        help="輸出結果的根目錄")
+    
+    
+    
+    # 其他設定
     parser.add_argument("--split", type=str, default="test",
                         help="要預測哪個切分? (預設 test)")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="使用設備 (cuda/cpu/mps)")
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="判定傷口的門檻值 (0.0 ~ 1.0)")
+    parser.add_argument("--delete", type=bool, default=True,
+                        help="要不要刪掉舊的推論")
     
     return parser.parse_args()
 
@@ -54,10 +60,11 @@ def get_args():
 def main():
     args = get_args()
     
-    input_dir = os.path.join(args.input, args.dataset, args.split, "images")
+    input_dir = os.path.join(args.in_root, args.dataset, args.split, "images")
+    checkpoint_path = os.path.join("checkpoints", args.version, args.run_name, "best.pt")
     # 1. 建立輸出資料夾結構
-    pred_dir = os.path.join(args.output, "predictions", args.dataset)
-    viz_dir = os.path.join(args.output, "visualizations")
+    pred_dir = os.path.join(args.out_root, "predictions", args.dataset)
+    viz_dir = os.path.join(args.out_root, "visualizations")
     overlay_dir = os.path.join(viz_dir, "overlay", args.dataset)
     combine_dir = os.path.join(viz_dir, "combine", args.dataset)
     
@@ -66,11 +73,11 @@ def main():
     print(f"[INFO] Predict Mask Output Folder: {pred_dir}")
     print(f"[INFO] Overlay Image Output Folder: {overlay_dir}")
     print(f"[INFO] Combine Image Output Folder: {combine_dir}")
-    print(f"[INFO] Checkpoint: {args.checkpoint}")
+    print(f"[INFO] Checkpoint: {checkpoint_path}")
     print(f"[INFO] Device: {args.device}")
     print(f"[INFO] Threshold: {args.threshold}")
     
-    if DELETE and os.path.exists(pred_dir) and os.path.exists(overlay_dir) and os.path.exists(combine_dir):
+    if args.delete and os.path.exists(pred_dir) and os.path.exists(overlay_dir) and os.path.exists(combine_dir):
         shutil.rmtree(pred_dir)
         shutil.rmtree(overlay_dir)
         shutil.rmtree(combine_dir)
@@ -80,13 +87,13 @@ def main():
     os.makedirs(combine_dir, exist_ok=True)
     
     # 2. 載入模型
-    if not os.path.exists(args.checkpoint):
-        print(f"[Error] Checkpoint not found: {args.checkpoint}")
+    if not os.path.exists(checkpoint_path):
+        print(f"[Error] Checkpoint not found: {checkpoint_path}")
         return
     
     print("[INFO] Loading model...")
     model = UNet(n_channels=3, n_classes=1).to(args.device)
-    load_checkpoint(args.checkpoint, model)
+    load_checkpoint(checkpoint_path, model)
     
     # 3. 定義預處理
     # 推論時只做 Resize & Normalize

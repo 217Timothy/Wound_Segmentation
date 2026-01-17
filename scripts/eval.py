@@ -13,35 +13,37 @@ sys.path.append(root_dir)
 
 from src.models.unet import UNet
 from src.datasets.wound_dataset import SegmentationDataset
-from src.engine import infer_one_image as infer_one_image
+from src.engine import infer_one_image
 from src.utils import load_checkpoint
+from src.metrics.dice import calculate_dice
+from src.metrics.iou import calculate_iou
 
 
 # ==========================================
 # 1. 設定參數與參數解析器
 # ==========================================
 IMAGE_SIZE = 512
-RUN_NAME = "unet_v1" # 這裡可以根據需要改成參數輸入，目前寫死也可以
-
 
 def get_args():
-    parser = argparse.ArgumentParser(description="Inference on images using U-Net")
+    parser = argparse.ArgumentParser()
     
-    # 必要參數
-    parser.add_argument("--dataset", type=str, required=True,
-                        help="資料集名稱 (例如 WoundSeg)")
+    # 必要參數：模型版本與資料集
+    parser.add_argument("--version", type=str, required=True,
+                        help="要使用的模型版本")
+    parser.add_argument("--run_name", type=str, required=True,
+                        help="第幾次跑")
+    parser.add_argument("--datasets", type=str, required=True, nargs="+",
+                        help="資料集名稱")
     
-    # 路徑設定
-    parser.add_argument("--root", type=str, default="data/processed",
-                        help="資料集根目錄")
+    # 輸入與輸出根目錄
+    parser.add_argument("--in_root", type=str, default="data/processed",
+                        help="輸入圖片的資料夾路徑")
+    parser.add_argument("--out_root", type=str, default="results/run",
+                        help="輸出結果的根目錄")
+    
+    # 其他設定
     parser.add_argument("--split", type=str, default="val",
-                        help="要評估的清單 (val)")
-    parser.add_argument("--checkpoint", type=str, default=f"checkpoints/{RUN_NAME}/best.pt",
-                        help="模型權重路徑")
-    parser.add_argument("--output", type=str, default=f"results/metrics/metrics_{RUN_NAME}.json",
-                        help="評估報告輸出路徑 (.json)")
-    
-    # 其他
+                        help="要評估的清單 (test/val)")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         help="使用設備")
     parser.add_argument("--threshold", type=float, default=0.5,
@@ -50,106 +52,112 @@ def get_args():
     return parser.parse_args()
 
 
-def calculate_dice(pred, target):
-    """
-    計算單張圖的 Dice Score
-    Args:
-        pred: (H, W) 0/1 Numpy Array
-        target: (H, W) 0/1 Numpy Array
-    """
-    
-    intersection = (pred * target).sum()
-    total = pred.sum() + target.sum()
-    
-    # 如果兩張圖都是全黑 (沒有傷口)，Dice 應該是 1.0 (滿分)
-    if total == 0:
-        return 1.0
-    
-    return (2. * intersection) / (total + 1e-6)
-
-
 def main():
     args = get_args()
     
-    print(f"[INFO] Dataset:    {args.dataset}")
+    checkpoint_path = os.path.join("checkpoints", args.version, args.run_name, "best.pt")
+    output_json_dir = os.path.join(args.out_root, args.version)
+    os.makedirs(output_json_dir, exist_ok=True)
+    output_json_path = os.path.join(output_json_dir, f"{args.run_name}.json")
+    
+    print(f"[INFO] Dataset:    {args.datasets}")
     print(f"[INFO] Split:      {args.split}")
-    print(f"[INFO] Checkpoint: {args.checkpoint}")
+    print(f"[INFO] Checkpoint: {checkpoint_path}")
     print(f"[INFO] Device:     {args.device}")
     
     # 1. 載入模型
-    if not os.path.exists(args.checkpoint):
-        print(f"[Error] Checkpoint not found: {args.checkpoint}")
+    if not os.path.exists(checkpoint_path):
+        print(f"[Error] Checkpoint not found: {checkpoint_path}")
         return
-
     print("[INFO] Loading model...")
     model = UNet(n_channels=3, n_classes=1).to(args.device)
-    load_checkpoint(args.checkpoint, model)
+    load_checkpoint(checkpoint_path, model)
     
     # 2. 準備 Dataset
-    # 這裡我們只給 Resize，剩下的 Manual Normalization 交給 Dataset 內部處理
     transform = A.Compose([
         A.Resize(height=IMAGE_SIZE, width=IMAGE_SIZE),
     ])
     
-    dataset = SegmentationDataset(
-        root_dir=args.root,
-        datasets=[args.dataset],
-        split=args.split,
-        transform=transform
-    )
+    # 用來存最終結果的容器
+    final_report = {}
     
-    if len(dataset) == 0:
-        print(f"[Error] No images found for {args.dataset} ({args.split})")
-        return
+    print(f"================ Evaluation Start ({args.split}) ================")
     
-    # 3. 開始評估迴圈
-    print(f"[INFO] Evaluating on {len(dataset)} images...")
-    dice_scores = []
-    
-    # 這裡我們不使用 DataLoader，直接用 index 存取，確保一張一張算
-    for i in tqdm(range(len(dataset))):
-        img_tensor, mask_tensor = dataset[i]
+    # 3. 針對每一個 Dataset 跑迴圈
+    for ds in args.datasets:
+        try:
+            dataset = SegmentationDataset(
+                root_dir=args.in_root,
+                datasets=[ds],
+                split=args.split,
+                transform=transform
+            )
+        except Exception as e:
+            print(f"[Warn] Skip {ds}: {e}")
+            continue
         
-        # A. 推論 (Prediction)
-        pred_mask = infer_one_image(
-            model,
-            img_tensor,
-            args.device,
-            args.threshold
-        )
+        if len(dataset) == 0:
+            print(f"[Error] No images found for {ds} ({args.split})")
+            return
         
-        # B. 處理標準答案 (Ground Truth)
-        # 把 Tensor 轉成 Numpy (H, W)，並確保它是整數 0/1
-        gt_mask = mask_tensor.squeeze().numpy().astype(np.uint8)
+        print(f"[INFO] Evaluating on {len(dataset)} images...")
+        dice_scores = []
+        iou_scores = []
         
-        # C. 算分
-        score = calculate_dice(pred_mask, gt_mask)
-        dice_scores.append(score)
-    
-    mean_dice = np.mean(dice_scores)
-    std_dice = np.std(dice_scores)
-    
-    print(f"\n📊 Evaluation Results")
-    print(f"   Dataset:   {args.dataset}")
-    print(f"   Mean Dice: {mean_dice:.4f}")
-    print(f"   Std Dev:   {std_dice:.4f}")
-    
-    os.makedirs(args.out, exist_ok=True)
-    
-    report = {
-        "dataset": args.dataset,
-        "split": args.split,
-        "checkpoint": args.checkpoint,
-        "mean_dice": float(mean_dice),
-        "std_dice": float(std_dice),
-        "num_samples": len(dataset),
-        "scores_detail": [float(s) for s in dice_scores] # 存下每一張的分數
-    }
-    
-    with open(args.out, "w") as f:
-        json.dump(report, f, indent=4)
+        for i in tqdm(range(len(dataset)), desc=f"Evaluating {ds}"):
+            img_tensor, mask_tensor = dataset[i]
+            
+            # A. 推論 (Prediction)
+            pred_mask = infer_one_image(
+                model,
+                img_tensor,
+                args.device,
+                args.threshold
+            )
+            
+            # B. 取得 GT (Ground Truth)
+            # mask_tensor 是 (1, H, W)，我們轉成 numpy (H, W)
+            gt_mask = mask_tensor.squeeze().numpy().astype(np.uint8)
+            
+            # C. 轉成 Tensor 準備算分
+            pred_tensor = torch.from_numpy(pred_mask).float()
+            gt_tensor = torch.from_numpy(gt_mask).float()
+            
+            # D. 算 Dice 與 IoU
+            dice = calculate_dice(pred_tensor, gt_tensor)
+            iou = calculate_iou(pred_tensor, gt_tensor)
+            
+            dice_scores.append(dice)
+            iou_scores.append(iou)
         
-    print(f"✅ Report saved to {args.out}")
+        # 統計該資料集的平均分
+        mean_dice = np.mean(dice_scores)
+        mean_iou = np.mean(iou_scores)
+        
+        print(f"   -> {ds}: Dice={mean_dice:.4f}, IoU={mean_iou:.4f}")
+        
+        final_report[ds] = {
+            "mean_dice": float(mean_dice),
+            "mean_iou": float(mean_iou),
+            "samples": len(dataset)
+        }
+        
+    # 4. 計算全部資料集的總平均 (All)
+    if len(final_report) > 0:
+        all_dice = np.mean([d["mean_dice"] for d in final_report.values()])
+        all_iou = np.mean([d["mean_iou"] for d in final_report.values()])
+        
+        final_report["all"] = {
+            "mean_dice": float(all_dice),
+            "mean_iou": float(all_iou)
+        }
+        print(f"\n================ Summary ================")
+        print(f" ALL DATASETS: Dice={all_dice:.4f}, IoU={all_iou:.4f}")
+    
+    with open(output_json_path, "w") as f:
+        json.dump(final_report, f, indent=4)
+    
+    print(f"✅ Results saved to:\n  - {output_json_path}")
 
 
 if __name__ == "__main__":
