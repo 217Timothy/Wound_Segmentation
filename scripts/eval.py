@@ -58,7 +58,7 @@ def main():
     checkpoint_path = os.path.join("checkpoints", args.version, args.run_name, "best.pt")
     output_json_dir = os.path.join(args.out_root, args.version)
     os.makedirs(output_json_dir, exist_ok=True)
-    output_json_path = os.path.join(output_json_dir, f"{args.run_name}.json")
+    output_json_path = os.path.join(output_json_dir, f"metrics_{args.run_name}.json")
     
     print(f"[INFO] Dataset:    {args.datasets}")
     print(f"[INFO] Split:      {args.split}")

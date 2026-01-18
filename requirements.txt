@@ -1,9 +1,11 @@
 # core
 numpy
+pandas
 opencv-python
 tqdm
 pillow
 scikit-learn
+matplotlib
 
 # pytorch (Apple Silicon friendly)
 torch

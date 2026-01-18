@@ -35,6 +35,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     print(f"[CheckPoint] Loading from {checkpoint_path} ...")
     
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    print(f"Last Run: Epoch: {checkpoint['epoch']}, Dice Score: {checkpoint['dice']: .4f}, IoU Score: {checkpoint['iou']: .4f}")
     
     model.load_state_dict(checkpoint["state_dict"])
     
