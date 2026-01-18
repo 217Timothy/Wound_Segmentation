@@ -155,7 +155,7 @@ def main():
         
         with open(log_path, mode="a", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([f"{epoch + 1}", f"{train_loss: .4f}", f"{val_loss: .4f}", f"{val_dice: .4f}", f"{val_iou: .4f}"])
+            writer.writerow([f"{epoch}", f"{train_loss: .4f}", f"{val_loss: .4f}", f"{val_dice: .4f}", f"{val_iou: .4f}"])
         
         checkpoint = {
             "epoch": epoch,

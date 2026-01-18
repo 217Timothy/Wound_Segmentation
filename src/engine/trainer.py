@@ -44,6 +44,8 @@ def train_one_epoch(model, train_loader, optimizer, scaler, loss_func, device, e
         scaler.step(optimizer)
         # optimizer.step()
         
+        scaler.update()
+        
         # --- 紀錄數據 ---
         running_loss += loss.item()
         
