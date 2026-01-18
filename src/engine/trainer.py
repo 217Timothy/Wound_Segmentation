@@ -1,7 +1,8 @@
 import torch
+from torch.amp.autocast_mode import autocast
 from tqdm import tqdm
 
-def train_one_epoch(model, train_loader, optimizer, loss_func, device, epoch):
+def train_one_epoch(model, train_loader, optimizer, scaler, loss_func, device, epoch):
     """
     執行一個 Epoch 的訓練
     Args:
@@ -21,25 +22,27 @@ def train_one_epoch(model, train_loader, optimizer, loss_func, device, epoch):
     
     loop = tqdm(train_loader, desc=f"Training Epoch: {epoch}")
     
-    for batch_idx, (imgs, masks) in enumerate(loop):
+    for imgs, masks in loop:
         # 1. 把資料搬到 GPU
-        imgs = imgs.to(device)
-        masks = masks.to(device)
+        imgs = imgs.to(device, non_blocking=True)
+        masks = masks.to(device, non_blocking=True)
         
         # 2. 清空梯度 (重要！)
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         
         # 3. 前向傳播 (Forward): 模型預測
-        preds = model(imgs)
-        
-        # 4. 計算誤差 (Loss)
-        loss = loss_func(preds, masks)
+        with autocast(device_type=device):
+            logits = model(imgs)
+            # 4. 計算誤差 (Loss)
+            loss = loss_func(logits, masks)
         
         # 5. 反向傳播 (Backward): 算出要怎麼修正
-        loss.backward()
+        scaler.scale(loss).backward()
+        # loss.backward()
         
         # 6. 更新參數 (Step): 實際修正模型
-        optimizer.step()
+        scaler.step(optimizer)
+        # optimizer.step()
         
         # --- 紀錄數據 ---
         running_loss += loss.item()

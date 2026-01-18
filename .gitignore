@@ -12,8 +12,9 @@ data
 # Outputs
 results
 
-# Checkpoint
+# Checkpoint and Logs
 checkpoints
+logs
 
 # OS
 .DS_Store

@@ -4,9 +4,9 @@ import argparse
 import csv
 import torch
 import torch.optim as optim
+from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
@@ -24,8 +24,8 @@ from src.engine import train_one_epoch, validate
 # 1. 設定參數 (Configuration)
 # ==========================================
 LEARNING_RATE = 1e-4
-BATCH_SIZE = 4       # 圖片大如果跑不動 (OOM)，改小成 2 或 1
-NUM_WORKERS = 0      # Mac 建議設 0，Linux Server 可以設 4 或 8
+BATCH_SIZE = 8       # 圖片大如果跑不動 (OOM)，改小成 2 或 1
+NUM_WORKERS = 8      # Mac 建議設 0，Linux Server 可以設 4 或 8
 IMAGE_HEIGHT = 512
 IMAGE_WIDTH = 512
 PIN_MEMORY = True
@@ -54,6 +54,7 @@ def get_args():
 def main():
     args = get_args()
     seed_everything()
+    torch.backends.cudnn.benchmark = True
     print(f"[INFO] Using Device: {args.device}")
     print(f"[INFO] Using Datasets: {args.dataset}")
     
@@ -104,22 +105,28 @@ def main():
         batch_size=BATCH_SIZE,
         num_workers=NUM_WORKERS,
         pin_memory=PIN_MEMORY,
+        persistent_workers=True,
         shuffle=True,
     )
     
     val_loader = DataLoader(
         val_ds,
-        batch_size=BATCH_SIZE,
-        num_workers=NUM_WORKERS,
+        batch_size=1,
+        num_workers=4,
         pin_memory=PIN_MEMORY,
-        shuffle=True,
+        persistent_workers=True,
+        shuffle=False,
     )
     
     # 4. 初始化模型
     print("[INFO] Initializing Model...")
     model = UNet(n_channels=3, n_classes=1).to(args.device)
+    compiled_model = model
     loss_func = BCEDiceLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    scaler = GradScaler(device="cuda", enabled=(args.device == "cuda"))
+    if torch.cuda.is_available() and args.device == 'cuda':
+        compiled_model = torch.compile(model, mode="reduce-overhead")
     
     checkpoint_path = os.path.join(checkpoint_dir, "last.pt")
     if os.path.exists(checkpoint_path):
@@ -129,8 +136,9 @@ def main():
     best_score = 0.0
     
     for epoch in range(1, args.epochs + 1):
-        train_loss = train_one_epoch(model, train_loader, optimizer, loss_func, args.device, epoch)
-        val_dict = validate(model, val_loader, loss_func, args.device)
+        train_loss = train_one_epoch(compiled_model, train_loader=train_loader, optimizer=optimizer, scaler=scaler, loss_func=loss_func, device=args.device, epoch=epoch)
+        
+        val_dict = validate(compiled_model, val_loader, loss_func, args.device)
         val_loss = val_dict["val_loss"]
         val_dice = val_dict["val_dice"]
         val_iou = val_dict["val_iou"]
@@ -145,7 +153,7 @@ def main():
         if is_best:
             best_score = val_dice
         
-        with open(log_path, mode="w", newline="") as f:
+        with open(log_path, mode="a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([f"{epoch + 1}", f"{train_loss: .4f}", f"{val_loss: .4f}", f"{val_dice: .4f}", f"{val_iou: .4f}"])
         
