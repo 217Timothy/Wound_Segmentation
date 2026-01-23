@@ -62,6 +62,7 @@ def get_args():
     parser.add_argument("--num_workers", type=int, default=8,
                         help="輸入想訓練的 worker 數")
     
+    parser.set_defaults(**defaults)
     args = parser.parse_args(remaining_args)
     
     return args
