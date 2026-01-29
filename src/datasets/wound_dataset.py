@@ -2,6 +2,7 @@ import os
 import cv2
 import torch
 import numpy as np
+from tqdm import tqdm
 from torch.utils.data import Dataset
 
 class SegmentationDataset(Dataset):
@@ -11,7 +12,8 @@ class SegmentationDataset(Dataset):
         root_dir: str, 
         datasets, 
         split="train",
-        transform=None
+        transform=None,
+        cache_data=True
     ):
         """
         通用分割資料集
@@ -20,14 +22,21 @@ class SegmentationDataset(Dataset):
             datasets (list): 資料集名稱列表，例如 ['WoundSeg', 'CO2Wound']
             split (str): 'train', 'val', 或 'test'
             transform (albumentations): 資料增強物件
+            cache_data (bool): 是否將資料預先載入 RAM (加速用)
         """
         
         self.root_dir = root_dir
         self.transform = transform
+        self.cache_data = cache_data
         self.files = [] # 這是存放所有檔案路徑的大清單
         
+        # --- 存放快取資料的列表 ---
+        self.cached_images = []
+        self.cached_masks = []
+        
+        # 1. 蒐集檔案路徑
         for ds in datasets:
-            # 1. 讀取 preprocess 生成的 txt 清單
+            # a. 讀取 preprocess 生成的 txt 清單
             # 路徑範例: data/processed/splits/WoundSeg/train.txt
             split_file = os.path.join(self.root_dir, "splits", ds, f"{split}.txt")
             
@@ -38,13 +47,37 @@ class SegmentationDataset(Dataset):
             with open(split_file, "r") as f:
                 fnames = [line.strip() for line in f.readlines()]
             
-            # 2. 組合完整路徑
+            # b. 組合完整路徑
             # 資料實際位置: data/processed/WoundSeg/train/images/WS_001.png
             base_path = os.path.join(self.root_dir, ds, split)
             for fname in fnames:
                 img_path = os.path.join(base_path, "images", fname)
                 mask_path = os.path.join(base_path, "masks", fname)
                 self.files.append((img_path, mask_path))
+        
+        # 2. 🔥 預先載入 RAM
+        if self.cache_data:
+            print(f"[INFO] Caching {len(self.files)} images into RAM for '{split}' set...")
+            for img_path, mask_path in tqdm(self.files, desc=f"Loading {split}"):
+                img = cv2.imread(img_path)
+                if img is None:
+                    print(f"❌ [Error] Skip bad image: {img_path}")
+                    continue
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                
+                mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                if mask is None:
+                    print(f"❌ [Error] Skip bad mask: {mask_path}")
+                    continue
+                
+                self.cached_images.append(img)
+                self.cached_masks.append(mask)
+            
+            if len(self.cached_images) != len(self.files):
+                print(f"[WARN] Some images failed to load. Resizing dataset from {len(self.files)} to {len(self.cached_images)}")
+                # 這裡簡單處理：直接依賴 cached_images 的長度
+                # 為了避免 index error，我們把 self.files 清空或不用它了
+                pass
     
     
     def __len__(self):

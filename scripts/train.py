@@ -146,6 +146,7 @@ def main():
         num_workers=args.num_workers,
         pin_memory=PIN_MEMORY,
         persistent_workers=True,
+        prefetch_factor=4,
         shuffle=True,
     )
     
