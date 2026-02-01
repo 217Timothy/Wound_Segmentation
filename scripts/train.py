@@ -167,7 +167,7 @@ def main():
     model = UNet(n_channels=3, n_classes=1).to(DEVICE)
     compiled_model = model
     loss_func = BCETverskyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scaler = GradScaler(device="cuda", enabled=(DEVICE == "cuda"))
     if torch.cuda.is_available() and DEVICE == 'cuda':
         compiled_model = torch.compile(model, mode="reduce-overhead")
