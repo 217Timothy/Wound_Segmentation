@@ -87,7 +87,7 @@ def main():
     
     config_dict = vars(args)
     config_dict["model_class"] = "UNet"
-    config_dict["loss_func"] = "BCEDiceLoss"
+    config_dict["loss_func"] = "BCETverskyLoss"
     with open(config_path, 'w') as f:
         yaml.dump(config_dict, f, sort_keys=False, indent=4)
 
