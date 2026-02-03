@@ -17,6 +17,7 @@ from src.engine import infer_one_image
 from src.utils import load_checkpoint
 from src.metrics.dice import calculate_dice
 from src.metrics.iou import calculate_iou
+from src.metrics.recall import calculate_recall
 
 
 # ==========================================
@@ -102,6 +103,7 @@ def main():
         print(f"[INFO] Evaluating on {len(dataset)} images...")
         dice_scores = []
         iou_scores = []
+        recall_scores = []
         
         for i in tqdm(range(len(dataset)), desc=f"Evaluating {ds}"):
             img_tensor, mask_tensor = dataset[i]
@@ -125,19 +127,23 @@ def main():
             # D. 算 Dice 與 IoU
             dice = calculate_dice(pred_tensor, gt_tensor)
             iou = calculate_iou(pred_tensor, gt_tensor)
+            recall = calculate_recall(pred_tensor, gt_tensor)
             
             dice_scores.append(dice)
             iou_scores.append(iou)
+            recall_scores.append(recall)
         
         # 統計該資料集的平均分
         mean_dice = np.mean(dice_scores)
         mean_iou = np.mean(iou_scores)
+        mean_recall = np.mean(recall_scores)
         
-        print(f"   -> {ds}: Dice={mean_dice:.4f}, IoU={mean_iou:.4f}")
+        print(f"   -> {ds}: Dice={mean_dice:.4f}, IoU={mean_iou:.4f}, Recall={mean_recall: .4f}")
         
         final_report[ds] = {
             "mean_dice": float(mean_dice),
             "mean_iou": float(mean_iou),
+            "mean_recall": float(mean_recall),
             "samples": len(dataset)
         }
     
@@ -145,13 +151,15 @@ def main():
     if len(final_report) > 0:
         all_dice = np.mean([d["mean_dice"] for d in final_report.values()])
         all_iou = np.mean([d["mean_iou"] for d in final_report.values()])
+        all_recall = np.mean([d["mean_recall"] for d in final_report.values()])
         
         final_report["all"] = {
             "mean_dice": float(all_dice),
-            "mean_iou": float(all_iou)
+            "mean_iou": float(all_iou),
+            "mean_recall": float(all_recall)
         }
         print(f"\n================ Summary ================")
-        print(f" ALL DATASETS: Dice={all_dice:.4f}, IoU={all_iou:.4f}")
+        print(f" ALL DATASETS: Dice={all_dice:.4f}, IoU={all_iou:.4f}, Recall={all_recall:.4f}")
     
     with open(output_json_path, "w") as f:
         json.dump(final_report, f, indent=4)

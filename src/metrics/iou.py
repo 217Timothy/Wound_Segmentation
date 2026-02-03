@@ -5,7 +5,6 @@ def calculate_iou(pred, target):
     Args:
         pred: 預測結果 (B, 1, H, W) 或 (B, H, W), 必須是 0/1 (Bool or Float)
         target: 真實標籤 (B, 1, H, W) 或 (B, H, W), 必須是 0/1
-        smooth: 防止分母為 0 的小數值
     Returns:
         iou: 計算出的 IoU
     """

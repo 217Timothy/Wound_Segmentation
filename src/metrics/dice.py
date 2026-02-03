@@ -5,9 +5,8 @@ def calculate_dice(pred, target):
     Args:
         pred: 預測結果 (B, 1, H, W) 或 (B, H, W), 必須已經是 0/1 (Bool or Float)
         target: 真實標籤 (B, 1, H, W)，值為 0 或 1
-        smooth: 平滑項，避免除以 0
     Returns:
-        dice: 計算出的 Dice 分數
+        dice: 計算出的 Dice
     """
     
     # 1. Flatten

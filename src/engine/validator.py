@@ -9,6 +9,7 @@ sys.path.append(root_dir)
 
 from src.metrics.dice import calculate_dice
 from src.metrics.iou import calculate_iou
+from src.metrics.recall import calculate_recall
 
 
 def validate(model, val_loader, loss_func, device):
@@ -24,6 +25,7 @@ def validate(model, val_loader, loss_func, device):
     running_loss = 0.0
     running_dice = 0.0
     running_iou = 0.0
+    running_recall = 0.0
     
     with torch.no_grad():
         loop = tqdm(val_loader, desc="Validating")
@@ -51,15 +53,21 @@ def validate(model, val_loader, loss_func, device):
             iou = calculate_iou(preds, masks)
             running_iou += iou
             
+            # 5. 算 Recall
+            recall = calculate_recall(preds, masks)
+            running_recall += recall
+            
             # 更新進度條
-            loop.set_postfix(loss=f"{loss.item(): .4f}", dice=f"{dice: .4f}", iou=f"{iou: .4f}")
+            loop.set_postfix(loss=f"{loss.item(): .4f}", dice=f"{dice: .4f}", iou=f"{iou: .4f}", recall=f"{recall: .4f}")
     
     avg_loss = running_loss / len(val_loader)
     avg_dice = running_dice / len(val_loader)
     avg_iou = running_iou / len(val_loader)
+    avg_recall = running_recall / len(val_loader)
     
     return {
         "val_loss": avg_loss,
         "val_dice": avg_dice,
-        "val_iou": avg_iou
+        "val_iou": avg_iou,
+        "val_recall": avg_recall
     }
