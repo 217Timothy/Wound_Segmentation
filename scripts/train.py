@@ -113,9 +113,9 @@ def main():
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
         
-        # 色彩增強 (add in run3)
-        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-        A.RGBShift(r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=0.5),
+        # 色彩增強 (add in run3) 
+        A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.25), # (change to 0.15 and p to 0.25 in run 7. original: 0.2, p=0.5)
+        A.RGBShift(r_shift_limit=15, g_shift_limit=5, b_shift_limit=5, p=0.25), # (change red to 15, blue and green to 5 and p to 0.25 in run 7. original: 20, p=0.5)
     ])
     
     val_transform = A.Compose([
