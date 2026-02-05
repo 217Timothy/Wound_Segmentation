@@ -168,6 +168,13 @@ def main():
     compiled_model = model
     loss_func = BCETverskyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer=optimizer,
+        mode='min',          # 我們希望 Loss 越小越好，所以是 'min'
+        factor=0.1,          # 觸發時，將 LR 縮小 10 倍 (1e-4 -> 1e-5)
+        patience=10,         # 如果 10 個 Epoch Loss 都沒降，就觸發
+        min_lr=1e-6          # 設定 LR 下限，避免太小變成 0
+    )
     scaler = GradScaler(device="cuda", enabled=(DEVICE == "cuda"))
     if torch.cuda.is_available() and DEVICE == 'cuda':
         compiled_model = torch.compile(model, mode="reduce-overhead")
@@ -199,6 +206,18 @@ def main():
         val_dice = val_dict["val_dice"]
         val_iou = val_dict["val_iou"]
         val_recall = val_dict["val_recall"]
+        
+        # --- [新增] 手動檢查並更新 Scheduler ---
+        # 1. 先紀錄舊的 Learning Rate
+        current_lr = optimizer.param_groups[0]['lr']
+
+        # 2. 更新 Scheduler
+        scheduler.step(val_loss)
+
+        # 3. 檢查更新後的 Learning Rate 是否變小 (代表被觸發了)
+        new_lr = optimizer.param_groups[0]['lr']
+        if new_lr < current_lr:
+            print(f"📉 [Scheduler] Learning Rate reduced from {current_lr:.2e} to {new_lr:.2e}")
         
         print(f"Epoch [{epoch}/{args.epochs}] | "
               f"Train Loss: {train_loss:.4f} | "
