@@ -15,7 +15,7 @@ sys.path.append(root_dir)
 
 from src.models.unet import UNet
 from src.datasets import SegmentationDataset
-from src.losses import BCEDiceLoss, BCETverskyLoss
+from src.losses import BCEDiceLoss, BCETverskyLoss, FocalTverskyLoss
 from src.utils.seed import seed_everything
 from src.utils.checkpoint import save_checkpoint, load_checkpoint
 from src.engine import train_one_epoch, validate
@@ -87,7 +87,7 @@ def main():
     
     config_dict = vars(args)
     config_dict["model_class"] = "UNet"
-    config_dict["loss_func"] = "BCETverskyLoss"
+    config_dict["loss_func"] = "FocalTverskyLoss"
     with open(config_path, 'w') as f:
         yaml.dump(config_dict, f, sort_keys=False, indent=4)
 
@@ -166,7 +166,7 @@ def main():
     print("[INFO] Initializing Model...")
     model = UNet(n_channels=3, n_classes=1).to(DEVICE)
     compiled_model = model
-    loss_func = BCETverskyLoss()
+    loss_func = FocalTverskyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer,
