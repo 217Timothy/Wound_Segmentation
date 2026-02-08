@@ -1,2 +1,1 @@
-from .unet import UNet
 from .smp_unet import SMPUnet

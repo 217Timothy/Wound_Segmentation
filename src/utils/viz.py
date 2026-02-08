@@ -15,7 +15,7 @@ def tensor_to_numpy(tensor):
     
     img = tensor.permute(1, 2, 0).cpu().numpy() # (C, H, W) -> (H, W, C)
     
-    img = (img * 225).clip(0, 225).astype(np.uint8) # clip 是為了防止有些數值稍微小於 0 或大於 1
+    img = (img * 255).clip(0, 255).astype(np.uint8) # clip 是為了防止有些數值稍微小於 0 或大於 1
     
     return img
 
@@ -42,6 +42,47 @@ def make_overlay(img, mask, color=(0, 255, 0), alpha=0.5):
         contours,
         -1,
         color=(0, 255, 255),
+        thickness=2
+    )
+    
+    return overlay
+
+
+def make_overlay_with_gt(img, pred_mask, gt_mask, color_pred=(0, 255, 0), color_gt=(0, 255, 0), alpha=0.5):
+    """
+    將 Mask 疊加在圖片上
+    color: 預設為綠色 (0, 255, 0) 因為傷口通常是紅的，綠色對比最明顯
+    """
+    
+    mask_color = np.zeros_like(img)
+    mask_color[pred_mask == 255] = color_pred
+    
+    img_cpy = img.copy()
+    overlay = cv2.addWeighted(img_cpy, 1, mask_color, alpha, 0)
+    
+    contours_pred, _ = cv2.findContours(
+        pred_mask,
+        cv2.RETR_EXTERNAL, 
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+    contours_gt, _ = cv2.findContours(
+        gt_mask,
+        cv2.RETR_EXTERNAL, 
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+    
+    cv2.drawContours(
+        overlay,
+        contours_pred,
+        -1,
+        color=(255, 0, 0),
+        thickness=2
+    )
+    cv2.drawContours(
+        overlay,
+        contours_gt,
+        -1,
+        color=(0, 0, 255),
         thickness=2
     )
     

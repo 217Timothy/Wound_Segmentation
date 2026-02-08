@@ -16,7 +16,7 @@ sys.path.append(root_dir)
 
 from src.models.unet import UNet
 from src.engine import infer_one_image
-from src.utils import load_checkpoint, make_overlay, make_combine
+from src.utils import load_checkpoint, make_overlay, make_overlay_with_gt, make_combine
 
 
 # ==========================================
@@ -82,7 +82,7 @@ def main():
         print(f"\n[INFO] Processing Dataset: {ds} ...")
         
         # A. 建立輸出資料夾結構
-        input_dir = os.path.join(args.in_root, ds, args.split, "images")
+        input_dir = os.path.join(args.in_root, ds, args.split)
         pred_dir = os.path.join(args.out_root, "predictions", args.version, args.run_name, ds) # 最終輸出 dir
         viz_dir = os.path.join(args.out_root, "visualizations", args.version, args.run_name)
         overlay_dir = os.path.join(viz_dir, "overlay", ds) # 最終輸出 dir
@@ -104,7 +104,7 @@ def main():
         extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
         img_paths = []
         for ext in extensions:
-            img_paths.extend(glob.glob(os.path.join(input_dir, ext)))
+            img_paths.extend(glob.glob(os.path.join(input_dir, "images", ext)))
         
         if not img_paths:
             print(f"[Warn] No images found in {input_dir}")
@@ -120,6 +120,21 @@ def main():
             img_bgr = cv2.imread(img_path)
             if img_bgr is None: continue
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+            
+            # b. 動態尋找對應的 GT Mask (解決 glob 順序可能不一致的問題)
+            gt_mask = None
+            # 嘗試常見的 mask 副檔名
+            for ext in [".png", ".jpg", ".jpeg", ".bmp"]:
+                # 假設 mask 放在 ../mask/filename.ext
+                possible_mask_path = os.path.join(input_dir, "masks", name_no_ext + ext)
+                if os.path.exists(possible_mask_path):
+                    gt_origin = cv2.imread(possible_mask_path, cv2.IMREAD_GRAYSCALE)
+                    if gt_origin is not None:
+                        # [重要修正] Resize GT Mask 讓它跟模型輸出一樣大 (512x512)
+                        gt_mask = cv2.resize(gt_origin, (IMAGE_SIZE, IMAGE_SIZE), interpolation=cv2.INTER_NEAREST)
+                        # 確保是 0/1 二值化
+                        gt_mask = (gt_mask > 0).astype(np.uint8) * 255
+                    break # 找到就停止
             
             # b. 預處理 - Step 1: Resize (用 Albumentations)
             augmented = transform(image=img_rgb)
@@ -145,8 +160,12 @@ def main():
             img_vis = cv2.cvtColor(img_resized, cv2.COLOR_RGB2BGR)
             
             # 存 Visualization 的 Overlay
-            overlay = make_overlay(img_vis, pred_mask)
-            cv2.imwrite(os.path.join(overlay_dir, f"{name_no_ext}.png"), overlay)
+            if args.split == "test":
+                overlay = make_overlay(img_vis, pred_mask)
+                cv2.imwrite(os.path.join(overlay_dir, f"{name_no_ext}.png"), overlay)
+            elif args.split == "val":
+                overlay = make_overlay_with_gt(img_vis, pred_mask, gt_mask)
+                cv2.imwrite(os.path.join(overlay_dir, f"{name_no_ext}.png"), overlay)
             
             # 存 Visualization 的 Combine
             combine = make_combine(img_vis, pred_mask)

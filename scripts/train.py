@@ -13,7 +13,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
-from src.models.unet import UNet
+from src.models import UNet, SMPUnet
 from src.datasets import SegmentationDataset
 from src.losses import BCEDiceLoss, BCETverskyLoss, FocalTverskyLoss
 from src.utils.seed import seed_everything
@@ -164,7 +164,14 @@ def main():
     
     # 4. 初始化模型
     print("[INFO] Initializing Model...")
-    model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+    model = UNet(n_channels=3, n_classes=1).to(DEVICE) # default model
+    if args.version == "v1":
+        model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+    elif args.version == "v2":
+        model = SMPUnet(encoder_name="resnet34", encoder_weights="imagenet", classes=1).to(DEVICE)
+    else:
+        pass
+    
     compiled_model = model
     loss_func = FocalTverskyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
