@@ -14,7 +14,7 @@ root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
 from src.models import UNet, SMPUnet
-from src.datasets import SegmentationDataset
+from src.datasets import SegmentationDataset, get_train_transforms, get_val_transforms
 from src.losses import BCEDiceLoss, BCETverskyLoss, FocalTverskyLoss
 from src.utils.seed import seed_everything
 from src.utils.checkpoint import save_checkpoint, load_checkpoint
@@ -103,32 +103,13 @@ def main():
             writer = csv.writer(f)
             writer.writerow(["epoch", "train_loss", "val_loss", "val_dice", "val_iou", "val_recall"])
     
-    # 2. 定義影像轉換/預處理 (Transforms)
-    # 你的 Dataset 寫法裡，如果這裡傳入 transform，就會在 Dataset 內部被呼叫
-    train_transform = A.Compose(transforms=[
-        A.Resize(height=IMAGE_SIZE, width=IMAGE_SIZE),
-        
-        # 幾何變換
-        A.Rotate(limit=35, p=0.5),
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        
-        # 色彩增強 (add in run3) 
-        A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.25), # (change to 0.15 and p to 0.25 in run 7. original: 0.2, p=0.5)
-        A.RGBShift(r_shift_limit=15, g_shift_limit=5, b_shift_limit=5, p=0.25), # (change red to 15, blue and green to 5 and p to 0.25 in run 7. original: 20, p=0.5)
-    ])
-    
-    val_transform = A.Compose([
-        A.Resize(height=IMAGE_SIZE, width=IMAGE_SIZE),
-    ])
-    
-    # 3. 準備資料集 (Dataset & DataLoader)
+    # 2. 準備資料集 (Dataset & DataLoader)
     print(f"[INFO] Loading Data from {DATA_ROOT_DIR} with datasets: {args.datasets}...")
     train_ds = SegmentationDataset(
         root_dir=DATA_ROOT_DIR,
         datasets=args.datasets,
         split="train",
-        transform=train_transform,
+        transform=get_train_transforms(),
         cache_data=True
     )
     
@@ -136,7 +117,7 @@ def main():
         root_dir=DATA_ROOT_DIR,
         datasets=args.datasets,
         split="val",
-        transform=val_transform,
+        transform=get_val_transforms(),
         cache_data=True
     )
     
@@ -162,7 +143,7 @@ def main():
         shuffle=False,
     )
     
-    # 4. 初始化模型
+    # 3. 初始化模型
     print("[INFO] Initializing Model...")
     model = UNet(n_channels=3, n_classes=1).to(DEVICE) # default model
     if args.version == "v1":
@@ -204,7 +185,7 @@ def main():
         print(f"Last Run: Epoch: {last_ckpt['epoch']}, Dice Score: {last_ckpt['dice']: .4f}, IoU Score: {last_ckpt['iou']: .4f}\n")
         start_epoch = last_ckpt["epoch"] + 1
     
-    # 5. 開始訓練
+    # 4. 開始訓練
     for epoch in range(start_epoch, args.epochs + 1):
         train_loss = train_one_epoch(compiled_model, train_loader=train_loader, optimizer=optimizer, scaler=scaler, loss_func=loss_func, device=DEVICE, epoch=epoch)
         

@@ -8,10 +8,21 @@ def get_train_transforms(img_size=(512, 512)):
         A.VerticalFlip(p=0.5),
         A.Rotate(limit=30, p=0.5), # 隨機旋轉 +/- 30度
         
+        A.OneOf([
+            A.GridDistortion(num_steps=5, distort_limit=0.3, p=1.0),
+            A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0),
+        ], p=0.3),
+        
+        A.CoarseDropout(
+            max_holes=8, max_height=32, max_width=32, 
+            min_holes=1, fill_value=0, mask_fill_value=0, p=0.3
+        ),
+        
         # 2. 色彩變換 (只影響 Image，不影響 Mask)
         # 傷口顏色很重要，所以我們輕微調整就好
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
         A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=15, val_shift_limit=10, p=0.3),
+        A.RGBShift(r_shift_limit=15, g_shift_limit=5, b_shift_limit=5, p=0.3),
         
         # 3. 確保尺寸 (雖然前處理做過了，但雙重保險是好習慣)
         A.Resize(height=img_size[1], width=img_size[0]),
