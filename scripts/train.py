@@ -149,19 +149,17 @@ def main():
     if args.version == "v1":
         model = UNet(n_channels=3, n_classes=1).to(DEVICE)
     elif args.version == "v2":
-        model = SMPUnet(encoder_name="resnet34", encoder_weights="imagenet", classes=1).to(DEVICE)
+        model = SMPUnet(encoder_name="resnet34", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
     else:
         pass
     
     compiled_model = model
     loss_func = FocalTverskyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
-        mode='min',          # 我們希望 Loss 越小越好，所以是 'min'
-        factor=0.1,          # 觸發時，將 LR 縮小 10 倍 (1e-4 -> 1e-5)
-        patience=10,         # 如果 10 個 Epoch Loss 都沒降，就觸發
-        min_lr=1e-6          # 設定 LR 下限，避免太小變成 0
+        T_max=200,
+        eta_min=1e-6
     )
     scaler = GradScaler(device="cuda", enabled=(DEVICE == "cuda"))
     if torch.cuda.is_available() and DEVICE == 'cuda':
@@ -200,12 +198,12 @@ def main():
         current_lr = optimizer.param_groups[0]['lr']
 
         # 2. 更新 Scheduler
-        scheduler.step(val_loss)
+        scheduler.step()
 
         # 3. 檢查更新後的 Learning Rate 是否變小 (代表被觸發了)
         new_lr = optimizer.param_groups[0]['lr']
         if new_lr < current_lr:
-            print(f"📉 [Scheduler] Learning Rate reduced from {current_lr:.2e} to {new_lr:.2e}")
+            print(f"📉 [Scheduler] Learning Rate reduced from {current_lr:.2e} to {new_lr:.2e} @ epoch {epoch}")
         
         print(f"Epoch [{epoch}/{args.epochs}] | "
               f"Train Loss: {train_loss:.4f} | "

@@ -10,12 +10,16 @@ def get_train_transforms(img_size=(512, 512)):
         
         A.OneOf([
             A.GridDistortion(num_steps=5, distort_limit=0.3, p=1.0),
-            A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0),
+            A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0), # type: ignore
         ], p=0.3),
         
         A.CoarseDropout(
-            max_holes=8, max_height=32, max_width=32, 
-            min_holes=1, fill_value=0, mask_fill_value=0, p=0.3
+            num_holes_range=(1, 8),     # 對應原本的 min_holes=1, max_holes=8
+            hole_height_range=(8, 32),  # 洞的高度範圍：8 到 32 像素
+            hole_width_range=(8, 32),   # 洞的寬度範圍：8 到 32 像素
+            fill=0,                     # 對應原本的 fill_value=0 (圖片挖洞填黑色)
+            fill_mask=0,                # 對應原本的 mask_fill_value=0 (遮罩也填黑色)
+            p=0.3
         ),
         
         # 2. 色彩變換 (只影響 Image，不影響 Mask)
