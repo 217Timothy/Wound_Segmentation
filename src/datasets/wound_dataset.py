@@ -86,22 +86,23 @@ class SegmentationDataset(Dataset):
     
     def __getitem__(self, idx):
         
-        # 1. 拿路徑
-        img_path, mask_path = self.files[idx]
+        # 如果有快取，直接從 RAM 裡面拿秒殺！
+        if self.cache_data and len(self.cached_images) == len(self.files):
+            img = self.cached_images[idx]
+            mask = self.cached_masks[idx]
+        else:
+            # 沒快取，才乖乖去硬碟讀圖
+            img_path, mask_path = self.files[idx]
+            img = cv2.imread(img_path)
+            if img is None:
+                raise FileNotFoundError(f"❌ 無法讀取圖片: {img_path}")
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            
+            mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+            if mask is None:
+                raise RuntimeError(f"Failed to read mask: {mask_path}")
         
-        # 2. 讀圖片 (轉 RGB)
-        img = cv2.imread(img_path)
-        # 🔥 [除錯關鍵] 檢查是否讀取失敗
-        if img is None:
-            raise FileNotFoundError(f"❌ 無法讀取圖片，請檢查路徑是否存在: {img_path}")
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
-        # 3. 讀 Mask (轉單層灰階)
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-        if mask is None:
-            raise RuntimeError(f"Failed to read mask: {mask_path}")
-        
-        # 4. 🔥 Data Augmentation (在這裡做!)
+        # 🔥 Data Augmentation (在這裡做!)
         # 我們使用 albumentations，它會同時處理 image 和 mask
         if self.transform is not None:
             augmented = self.transform(image=img, mask=mask)
