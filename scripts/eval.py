@@ -11,13 +11,14 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
-from src.models.unet import UNet
+from src.models import UNet, SMPUnet
 from src.datasets.wound_dataset import SegmentationDataset
 from src.engine import infer_one_image
 from src.utils import load_checkpoint
 from src.metrics.dice import calculate_dice
 from src.metrics.iou import calculate_iou
 from src.metrics.recall import calculate_recall
+from src.datasets import get_val_transforms
 
 
 # ==========================================
@@ -66,16 +67,28 @@ def main():
     print(f"[INFO] Device:     {DEVICE}")
     
     # 1. 定義影像轉換/預處理
-    transform = A.Compose([
-        A.Resize(height=IMAGE_SIZE, width=IMAGE_SIZE),
-    ])
+    transform = get_val_transforms(img_size=(512, 512))
     
     # 2. 載入模型
     if not os.path.exists(checkpoint_path):
         print(f"[Error] Checkpoint not found: {checkpoint_path}")
         return
     print("[INFO] Loading model...")
-    model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+    if args.version == "v1":
+        model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+    elif args.version == "v2":
+        # 【關鍵修改】判斷是不是 run3，只有 run3 才有 scSE
+        attn_type = None if args.run_name == "run2" else "scse"
+        
+        model = SMPUnet(
+            encoder_name="resnet34", 
+            encoder_weights=None,  # 推論時不用下載 imagenet 權重
+            decoder_attention_type=attn_type, # 動態給予 attention 設定
+            classes=1
+        ).to(DEVICE)
+    else:
+        print("[Error] Unsupported Version")
+        return
     load_checkpoint(checkpoint_path, model)
     
     # 用來存最終結果的容器
@@ -116,15 +129,12 @@ def main():
                 args.threshold
             )
             
-            # B. 取得 GT (Ground Truth)
-            # mask_tensor 是 (1, H, W)，我們轉成 numpy (H, W)
-            gt_mask = mask_tensor.squeeze().numpy().astype(np.uint8)
             
-            # C. 轉成 Tensor 準備算分
+            # B. 轉成 Tensor 準備算分
             pred_tensor = torch.from_numpy(pred_mask).float()
-            gt_tensor = torch.from_numpy(gt_mask).float()
+            gt_tensor = mask_tensor.squeeze(0).float()
             
-            # D. 算 Dice 與 IoU
+            # C. 算 Dice 與 IoU
             dice = calculate_dice(pred_tensor, gt_tensor)
             iou = calculate_iou(pred_tensor, gt_tensor)
             recall = calculate_recall(pred_tensor, gt_tensor)

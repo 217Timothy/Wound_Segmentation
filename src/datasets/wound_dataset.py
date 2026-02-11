@@ -108,19 +108,17 @@ class SegmentationDataset(Dataset):
             img = augmented["image"]
             mask = augmented["mask"]
         
-        # 5. 轉 Tensor 與標準化 (Normalization)
-        # 圖片: 0-255 -> 0.0-1.0 (float32)
-        # Mask: 0-255 -> 0.0-1.0 (float32)
-        # 如果 transform 裡沒有 ToTensorV2，我們手動轉
-        if isinstance(img, np.ndarray):
-            img = img.astype(np.float32) / 255.0
-            img = np.transpose(img, (2, 0, 1)) # (H, W, 3) -> (3, H, W)
-            img = torch.from_numpy(img)
-        if isinstance(mask, np.ndarray):
-            mask = mask.astype(np.float32) / 255.0
-            mask[mask >= 0.5] = 1
-            mask[mask < 0.5] = 0
-            mask = np.expand_dims(mask, axis=0) # (H, W) -> (1, H, W) (增加 Channel 維度)
-            mask = torch.from_numpy(mask)
+        # ================= 【最後加上這兩層防護網】 =================
+        
+        # 防護網 1：把 0 和 255 強制轉成 0.0 和 1.0 的浮點數 (Float)
+        if isinstance(mask, torch.Tensor):
+            mask = (mask > 0).float()
+        else:
+            # 預防萬一 transform 沒有 ToTensorV2 導致回傳 numpy 的情況
+            mask = torch.from_numpy((mask > 0).astype(np.float32))
+            
+        # 防護網 2：補上 Channel 維度 ([512, 512] -> [1, 512, 512])
+        if len(mask.shape) == 2:
+            mask = mask.unsqueeze(0)
 
         return img, mask

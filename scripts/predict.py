@@ -14,9 +14,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
-from src.models.unet import UNet
+from src.models import UNet, SMPUnet
 from src.engine import infer_one_image
 from src.utils import load_checkpoint, make_overlay, make_overlay_with_gt, make_combine
+from src.datasets import get_val_transforms
 
 
 # ==========================================
@@ -43,7 +44,7 @@ def get_args():
                         help="輸出結果的根目錄")
     
     # 其他設定
-    parser.add_argument("--split", type=str, default="test",
+    parser.add_argument("--split", type=str, default="val",
                         help="要預測哪個切分? (預設 test)")
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="判定傷口的門檻值 (0.0 ~ 1.0)")
@@ -65,16 +66,31 @@ def main():
     
     # 1. 定義影像轉換/預處理
     # 推論時只做 Resize & Normalize
-    transform = A.Compose([
-        A.Resize(height=IMAGE_SIZE, width=IMAGE_SIZE),
-    ])
+    transform = get_val_transforms(img_size=(IMAGE_SIZE, IMAGE_SIZE))
     
     # 2. 載入模型
     if not os.path.exists(checkpoint_path):
         print(f"[Error] Checkpoint not found: {checkpoint_path}")
         return
     print("[INFO] Loading model...")
-    model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+    print("[INFO] Initializing Model...")
+    
+    if args.version == "v1":
+        model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+    elif args.version == "v2":
+        # 【關鍵修改】判斷是不是 run3，只有 run3 才有 scSE
+        attn_type = None if args.run_name == "run2" else "scse"
+        
+        model = SMPUnet(
+            encoder_name="resnet34", 
+            encoder_weights=None,  # 推論時不用下載 imagenet 權重
+            decoder_attention_type=attn_type, # 動態給予 attention 設定
+            classes=1
+        ).to(DEVICE)
+    else:
+        print("[Error] Unsupported Version")
+        return
+    
     load_checkpoint(checkpoint_path, model)
     
     # 3. 資料準備與推論
@@ -121,7 +137,7 @@ def main():
             if img_bgr is None: continue
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             
-            # b. 動態尋找對應的 GT Mask (解決 glob 順序可能不一致的問題)
+            # 動態尋找對應的 GT Mask (解決 glob 順序可能不一致的問題)
             gt_mask = None
             # 嘗試常見的 mask 副檔名
             for ext in [".png", ".jpg", ".jpeg", ".bmp"]:
@@ -136,13 +152,13 @@ def main():
                         gt_mask = (gt_mask > 0).astype(np.uint8) * 255
                     break # 找到就停止
             
-            # b. 預處理 - Step 1: Resize (用 Albumentations)
-            augmented = transform(image=img_rgb)
-            img_resized = augmented["image"] # 這時候還是 Numpy (512, 512, 3), 0-255
+            # b. 預處理
+            # 專門留給後面 OpenCV 畫圖疊加用的底圖 (只需要 Resize，絕對不能 Normalize)
+            img_resized = cv2.resize(img_rgb, (IMAGE_SIZE, IMAGE_SIZE), interpolation=cv2.INTER_LINEAR)
             
-            img_float = img_resized.astype(np.float32) / 255.0
-            im_transpose = img_float.transpose((2, 0, 1)) # (H, W, C) -> (C, H, W)
-            img_tensor = torch.from_numpy(im_transpose)
+            # 專門給模型推論用的 Tensor (會自動執行 Resize + Normalize + 轉 Tensor)
+            augmented = transform(image=img_rgb)
+            img_tensor = augmented["image"] # 已經是完美的 Tensor，不用轉軸也不用除以 255！
             
             # c. 核心推論
             pred_mask = infer_one_image(

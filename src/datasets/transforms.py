@@ -31,9 +31,12 @@ def get_train_transforms(img_size=(512, 512)):
         # 3. 確保尺寸 (雖然前處理做過了，但雙重保險是好習慣)
         A.Resize(height=img_size[1], width=img_size[0]),
         
+        # 4. 正規化
+        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        
         # 4. 轉 Tensor (這步會自動除以 255 並轉 CHW，如果在 Dataset 手寫了就不用這行)
         # 為了配合上面 Dataset 手寫的邏輯，這裡我先註解掉，讓 Dataset 自己處理 Tensor 轉換
-        # ToTensorV2(),
+        ToTensorV2(),
     ])
 
 
@@ -41,4 +44,6 @@ def get_train_transforms(img_size=(512, 512)):
 def get_val_transforms(img_size=(512, 512)):
     return A.Compose([
         A.Resize(height=img_size[1], width=img_size[0]),
+        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ToTensorV2()
     ])

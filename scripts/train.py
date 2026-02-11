@@ -151,14 +151,15 @@ def main():
     elif args.version == "v2":
         model = SMPUnet(encoder_name="resnet34", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
     else:
-        pass
+        print("[Error] Unsupported Version")
+        return
     
     compiled_model = model
     loss_func = FocalTverskyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
-        T_max=200,
+        T_max=args.epochs,
         eta_min=1e-6
     )
     scaler = GradScaler(device="cuda", enabled=(DEVICE == "cuda"))
