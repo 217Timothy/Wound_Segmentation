@@ -149,7 +149,7 @@ def main():
     if args.version == "v1":
         model = UNet(n_channels=3, n_classes=1).to(DEVICE)
     elif args.version == "v2":
-        model = SMPUnet(encoder_name="resnet34", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
+        model = SMPUnet(encoder_name="resnet50", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
     else:
         print("[Error] Unsupported Version")
         return
@@ -204,7 +204,7 @@ def main():
         # 3. 檢查更新後的 Learning Rate 是否變小 (代表被觸發了)
         new_lr = optimizer.param_groups[0]['lr']
         if new_lr < current_lr:
-            print(f"📉 [Scheduler] Learning Rate reduced from {current_lr:.2e} to {new_lr:.2e} @ epoch {epoch}")
+            print(f"📉 [Scheduler] Learning Rate reduced from {current_lr:.2e} to {new_lr:.2e}")
         
         print(f"Epoch [{epoch}/{args.epochs}] | "
               f"Train Loss: {train_loss:.4f} | "
