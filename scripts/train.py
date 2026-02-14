@@ -4,6 +4,7 @@ import argparse
 import csv
 import yaml
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
@@ -145,11 +146,15 @@ def main():
     
     # 3. 初始化模型
     print("[INFO] Initializing Model...")
-    model = UNet(n_channels=3, n_classes=1).to(DEVICE) # default model
     if args.version == "v1":
         model = UNet(n_channels=3, n_classes=1).to(DEVICE)
     elif args.version == "v2":
         model = SMPUnet(encoder_name="resnet50", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
+        old_head = model.model.segmentation_head
+        model.model.segmentation_head = nn.Sequential(
+            nn.Dropout2d(p=0.3),    # 隨機丟棄 50% 的特徵圖，強迫模型學習更魯棒的特徵
+            old_head
+        )
     else:
         print("[Error] Unsupported Version")
         return
