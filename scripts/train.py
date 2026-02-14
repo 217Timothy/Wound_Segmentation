@@ -152,7 +152,7 @@ def main():
         model = SMPUnet(encoder_name="resnet50", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
         old_head = model.model.segmentation_head
         model.model.segmentation_head = nn.Sequential(
-            nn.Dropout2d(p=0.3),    # 隨機丟棄 50% 的特徵圖，強迫模型學習更魯棒的特徵
+            nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
             old_head
         )
     else:

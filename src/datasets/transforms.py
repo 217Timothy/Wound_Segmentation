@@ -10,7 +10,7 @@ def get_train_transforms(img_size=(512, 512)):
         
         A.OneOf([
             A.GridDistortion(num_steps=5, distort_limit=0.3, p=1.0),
-            A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0), # type: ignore
+            A.ElasticTransform(alpha=1, sigma=50, p=1.0),
         ], p=0.3),
         
         A.CoarseDropout(
