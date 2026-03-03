@@ -44,15 +44,15 @@ def highlight_max(ax, x_data, y_data, color="lightcoral"):
 
 
 def highlight_min(ax, x_data, y_data, color="lightcoral"):
-    mim_val = y_data.min()
+    min_val = y_data.min()
     min_idx = y_data.idxmin()
     min_epoch = x_data[min_idx]
     
-    ax.scatter(min_epoch, mim_val, color=color, s=120, zorder=5, edgecolors='white', linewidth=2)
+    ax.scatter(min_epoch, min_val, color=color, s=120, zorder=5, edgecolors='white', linewidth=2)
     
-    ax.annotate(f'Min: {mim_val:.4f}\n(Epoch {min_epoch})', 
-                xy=(min_epoch, mim_val), 
-                xytext=(min_epoch, mim_val - (mim_val * 0.1)), # 文字稍微往下移一點，避免擋住線
+    ax.annotate(f'Min: {min_val:.4f}\n(Epoch {min_epoch})', 
+                xy=(min_epoch, min_val), 
+                xytext=(min_epoch, min_val + 0.1), # 文字稍微往下移一點，避免擋住線
                 color='black',
                 fontsize=10,
                 fontweight='bold',

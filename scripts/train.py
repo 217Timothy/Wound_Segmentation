@@ -14,7 +14,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
-from src.models import UNet, SMPUnet
+from src.models import UNet, ResUnet
 from src.datasets import SegmentationDataset, get_train_transforms, get_val_transforms
 from src.losses import BCEDiceLoss, BCETverskyLoss, FocalTverskyLoss
 from src.utils.seed import seed_everything
@@ -149,9 +149,9 @@ def main():
     if args.version == "v1":
         model = UNet(n_channels=3, n_classes=1).to(DEVICE)
     elif args.version == "v2":
-        model = SMPUnet(encoder_name="resnet50", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
+        model = ResUnet(encoder_name="resnet50", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
         old_head = model.model.segmentation_head
-        model.model.segmentation_head = nn.Sequential(
+        model.model.segmentation_head = nn.Sequential( # type: ignore
             nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
             old_head
         )

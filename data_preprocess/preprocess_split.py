@@ -188,7 +188,7 @@ def main():
         print(f"🗑️  Cleaning up old data at: {OUT_ROOT} ...")
         shutil.rmtree(OUT_ROOT, ignore_errors=True) # 遞迴刪除整個資料夾
     
-    datasets = ["WoundSeg", "CO2Wound"]
+    datasets = ["WoundSeg", "CO2Wound", "FootUlcer"]
     print(f"[INFO] Raw Root: {RAW_ROOT}")
     print(f"[INFO] Labeled Root: {LABELED_ROOT}")
     print(f"[INFO] Test Root: {TEST_ROOT}")

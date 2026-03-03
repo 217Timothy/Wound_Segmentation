@@ -4,6 +4,7 @@ import json
 import argparse
 import numpy as np
 import torch
+import torch.nn as nn
 import albumentations as A
 from tqdm import tqdm
 
@@ -11,7 +12,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
-from src.models import UNet, SMPUnet
+from src.models import UNet, ResUnet
 from src.datasets.wound_dataset import SegmentationDataset
 from src.engine import infer_one_image
 from src.utils import load_checkpoint
@@ -77,18 +78,47 @@ def main():
     if args.version == "v1":
         model = UNet(n_channels=3, n_classes=1).to(DEVICE)
     elif args.version == "v2":
-        # 【關鍵修改】判斷是不是 run3，只有 run3 才有 scSE
-        attn_type = None if args.run_name == "run2" else "scse"
-        
-        model = SMPUnet(
-            encoder_name="resnet34", 
-            encoder_weights=None,  # 推論時不用下載 imagenet 權重
-            decoder_attention_type=attn_type, # 動態給予 attention 設定
+        # 情境 a: Run 2 (ResNet34 + None)
+        if "run2" in args.run_name:
+            print("[INFO] Detecting Run 2 (or other) configuration: ResNet34 (No Attention)")
+            encoder = "resnet34"
+            attn_type = None
+            
+        # 情境 B: Run 3 (ResNet34 + scSE)
+        elif "run3" in args.run_name:
+            print("[INFO] Detecting Run 3 configuration: ResNet34 + scSE")
+            encoder = "resnet34"
+            attn_type = "scse"
+            
+        # 情境 C: Run 4 (ResNet50 + scSE)
+        elif "run4" in args.run_name:
+            print("[INFO] Detecting Run 4 configuration: ResNet50 + scSE")
+            encoder = "resnet50"
+            attn_type = "scse"
+            
+        #情境 D: Run 5 (ResNet50 + scSE + Dropout)
+        else:
+            print("[INFO] Detecting Run 5 configuration: ResNet50 + scSE + Dropout(p=0.5)")
+            encoder = "resnet50"
+            attn_type = "scse"
+
+        model = ResUnet(
+            encoder_name=encoder, 
+            encoder_weights=None,  # 推論時設為 None，因為我們會載入 checkpoint
+            decoder_attention_type=attn_type,
             classes=1
         ).to(DEVICE)
+        # 🔥 如果是 Run 5，必須裝上 Dropout 才能對齊權重檔
+        if "run5" in args.run_name:
+            old_head = model.model.segmentation_head
+            model.model.segmentation_head = nn.Sequential( # type: ignore
+                nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
+                old_head
+            )
     else:
         print("[Error] Unsupported Version")
         return
+    
     load_checkpoint(checkpoint_path, model)
     
     # 用來存最終結果的容器
