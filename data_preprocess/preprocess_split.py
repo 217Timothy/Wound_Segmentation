@@ -15,7 +15,8 @@ OUT_ROOT = "data/processed"
 TARGET_SIZE = (512, 512)
 PREFIX_MAP = {
     "WoundSeg": "WS",
-    "CO2Wound": "CO2"
+    "CO2Wound": "CO2",
+    "FootUlcer": "FU"
 }
 
 
@@ -76,7 +77,7 @@ def generate_new_name(original_fname, dataset_name):
     # 使用 Regex 找出檔名中的所有數字序列
     numbers = re.findall(r'\d+', base_name)
     
-    if numbers:
+    if numbers and dataset_name != "FootUlcer":
         # 通常 ID 是檔名中最後一組數字 (避免抓到日期)
         # 例如: IMG_20251212_005.jpg -> 取 005
         real_id = numbers[-1]
@@ -198,7 +199,7 @@ def main():
         
         labeled_img = os.path.join(LABELED_ROOT, ds_name, "images")
         labeled_mask = os.path.join(LABELED_ROOT, ds_name, "masks")
-        test_img = os.path.join(TEST_ROOT, ds_name)
+        test_img = os.path.join(TEST_ROOT, ds_name, "images")
         test_mask = os.path.join(TEST_ROOT, ds_name, "masks")
         
         # 成品區
@@ -219,7 +220,7 @@ def main():
             #run4 改成 Train/Val 8:2
             # test_size=0.2 代表切出 20% 給驗證集 (Val)，剩下 80% 給訓練集 (Train)
             # random_state=42 確保每次切出來的結果都一樣
-            train, val = train_test_split(data, test_size=0.22, random_state=42)
+            train, val = train_test_split(data, test_size=0.2, random_state=42)
             
             # 3. 實際存檔 (把記憶體寫入硬碟)
             # 這時候才會產生 data/processed/WoundSeg/train/images/WS_001.png

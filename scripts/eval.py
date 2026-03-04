@@ -12,7 +12,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
-from src.models import UNet, ResUnet
+from src.models import UNet, ResUnet, EfficientUnet
 from src.datasets.wound_dataset import SegmentationDataset
 from src.engine import infer_one_image
 from src.utils import load_checkpoint
@@ -115,6 +115,18 @@ def main():
                 nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
                 old_head
             )
+    elif args.version == "v3":
+        encoder = "efficientnet-b4"
+        attn_type = "scse"
+        # if args.run_name == "run1":
+        #     encoder = "efficientnet-b4"
+        #     attn_type = "scse"
+        model = EfficientUnet(
+            encoder_name=encoder, 
+            encoder_weights=None,  # 推論時設為 None，因為我們會載入 checkpoint
+            decoder_attention_type=attn_type,
+            classes=1
+        ).to(DEVICE)
     else:
         print("[Error] Unsupported Version")
         return

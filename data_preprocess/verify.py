@@ -39,7 +39,7 @@ def verify_dataset():
         print(f"❌ 找不到 {PROCESSED_ROOT}，請先執行前處理！")
         return
     
-    datasets = ["WoundSeg", "CO2Wound"]
+    datasets = ["WoundSeg", "CO2Wound", "FootUlcer"]
     splits = ["train", "val"]
     
     for ds in datasets:
