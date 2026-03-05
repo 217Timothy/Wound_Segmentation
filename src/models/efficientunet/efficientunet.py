@@ -2,7 +2,7 @@ import segmentation_models_pytorch as smp
 import torch.nn as nn
 
 class EfficientUnet(nn.Module):
-    def __init__(self, encoder_name="efficientnet-b4", encoder_weights:str | None="imagenet", decoder_attention_type=None, classes=1):
+    def __init__(self, encoder_name="efficientnet-b3", encoder_weights:str | None="imagenet", decoder_attention_type=None, classes=1):
         super().__init__()
         self.model = smp.Unet(
             encoder_name=encoder_name,

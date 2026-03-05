@@ -90,16 +90,9 @@ def main():
             print("[INFO] Detecting Run 3 configuration: ResNet34 + scSE")
             encoder = "resnet34"
             attn_type = "scse"
-            
-        # 情境 C: Run 4 (ResNet50 + scSE)
-        elif "run4" in args.run_name:
-            print("[INFO] Detecting Run 4 configuration: ResNet50 + scSE")
-            encoder = "resnet50"
-            attn_type = "scse"
-            
-        #情境 D: Run 5 (ResNet50 + scSE + Dropout)
+        #情境 D: Run 4, 5, 6 (ResNet50 + scSE + Dropout)
         else:
-            print("[INFO] Detecting Run 5 configuration: ResNet50 + scSE + Dropout(p=0.5)")
+            print("[INFO] configuration: ResNet50 + scSE + Dropout(p=0.5)")
             encoder = "resnet50"
             attn_type = "scse"
 
@@ -109,15 +102,15 @@ def main():
             decoder_attention_type=attn_type,
             classes=1
         ).to(DEVICE)
-        # 🔥 如果是 Run 5，必須裝上 Dropout 才能對齊權重檔
-        if "run5" in args.run_name:
+        # 🔥 如果是 Run 5, 6，必須裝上 Dropout 才能對齊權重檔
+        if "run5" or "run6" in args.run_name:
             old_head = model.model.segmentation_head
             model.model.segmentation_head = nn.Sequential( # type: ignore
                 nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
                 old_head
             )
     elif args.version == "v3":
-        encoder = "efficientnet-b4"
+        encoder = "efficientnet-b3"
         attn_type = "scse"
         # if args.run_name == "run1":
         #     encoder = "efficientnet-b4"

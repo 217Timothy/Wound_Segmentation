@@ -108,15 +108,15 @@ def main():
             decoder_attention_type=attn_type,
             classes=1
         ).to(DEVICE)
-        # 🔥 如果是 Run 5，必須裝上 Dropout 才能對齊權重檔
-        if "run5" in args.run_name:
+        # 🔥 如果是 Run 5, 6，必須裝上 Dropout 才能對齊權重檔
+        if "run5" or "run6" in args.run_name:
             old_head = model.model.segmentation_head
             model.model.segmentation_head = nn.Sequential( # type: ignore
                 nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
                 old_head
             )
     elif args.version == "v3":
-        encoder = "efficientnet-b4"
+        encoder = "efficientnet-b3"
         attn_type = "scse"
         # if args.run_name == "run1":
         #     encoder = "efficientnet-b4"

@@ -156,7 +156,7 @@ def main():
             old_head
         )
     elif args.version == "v3":
-        model = EfficientUnet(encoder_name="efficientnet-b4", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
+        model = EfficientUnet(encoder_name="efficientnet-b3", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
     else:
         print("[Error] Unsupported Version")
         return
