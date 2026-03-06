@@ -160,6 +160,7 @@ def main():
     else:
         print("[Error] Unsupported Version")
         return
+    print(model)
     
     compiled_model = model
     loss_func = FocalTverskyLoss()
