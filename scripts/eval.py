@@ -131,8 +131,7 @@ def main():
     else:
         print("[Error] Unsupported Version")
         return
-    
-    print(model)
+
     load_checkpoint(checkpoint_path, model)
     
     # 用來存最終結果的容器

@@ -125,7 +125,6 @@ def main():
         print("[Error] Unsupported Version")
         return
     
-    print(model)
     load_checkpoint(checkpoint_path, model)
     
     # 3. 資料準備與推論

@@ -27,6 +27,6 @@ class EfficientUnet(nn.Module):
         features[-1] = self.bottleneck_dropout(features[-1])
         
         # 3. 進入 Decoder 並產生輸出
-        decoder_output = self.model.decoder(*features)
+        decoder_output = self.model.decoder(features)
         logits = self.model.segmentation_head(decoder_output)
         return logits
