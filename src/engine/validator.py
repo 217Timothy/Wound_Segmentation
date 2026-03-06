@@ -7,9 +7,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
-from src.metrics.dice import calculate_dice
-from src.metrics.iou import calculate_iou
-from src.metrics.recall import calculate_recall
+from src.metrics import calculate_dice, calculate_iou, calculate_recall, calculate_precision
 
 
 def validate(model, val_loader, loss_func, device):
@@ -26,6 +24,7 @@ def validate(model, val_loader, loss_func, device):
     running_dice = 0.0
     running_iou = 0.0
     running_recall = 0.0
+    running_precision = 0.0
     
     with torch.no_grad():
         loop = tqdm(val_loader, desc="Validating")
@@ -57,17 +56,23 @@ def validate(model, val_loader, loss_func, device):
             recall = calculate_recall(preds, masks)
             running_recall += recall
             
+            # 6. 算 Precision
+            precision = calculate_precision(preds, masks)
+            running_precision += precision
+            
             # 更新進度條
-            loop.set_postfix(loss=f"{loss.item(): .4f}", dice=f"{dice: .4f}", iou=f"{iou: .4f}", recall=f"{recall: .4f}")
+            loop.set_postfix(loss=f"{loss.item(): .4f}", dice=f"{dice: .4f}", iou=f"{iou: .4f}", recall=f"{recall: .4f}", precision=f"{precision: .4f}")
     
     avg_loss = running_loss / len(val_loader)
     avg_dice = running_dice / len(val_loader)
     avg_iou = running_iou / len(val_loader)
     avg_recall = running_recall / len(val_loader)
+    avg_precision = running_precision / len(val_loader)
     
     return {
         "val_loss": avg_loss,
         "val_dice": avg_dice,
         "val_iou": avg_iou,
-        "val_recall": avg_recall
+        "val_recall": avg_recall,
+        "val_precision": avg_precision
     }

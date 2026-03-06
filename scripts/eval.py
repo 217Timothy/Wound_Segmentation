@@ -16,16 +16,14 @@ from src.models import UNet, ResUnet, EfficientUnet
 from src.datasets.wound_dataset import SegmentationDataset
 from src.engine import infer_one_image
 from src.utils import load_checkpoint
-from src.metrics.dice import calculate_dice
-from src.metrics.iou import calculate_iou
-from src.metrics.recall import calculate_recall
+from src.metrics import calculate_dice, calculate_iou, calculate_recall, calculate_precision
 from src.datasets import get_val_transforms
 
 
 # ==========================================
 # 1. 設定參數與參數解析器
 # ==========================================
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 IMAGE_SIZE = 512
 
 def get_args():
@@ -77,6 +75,7 @@ def main():
     print("[INFO] Loading model...")
     if args.version == "v1":
         model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+    
     elif args.version == "v2":
         # 情境 a: Run 2 (ResNet34 + None)
         if "run2" in args.run_name:
@@ -101,7 +100,7 @@ def main():
             print("[INFO] Detecting Run 5 configuration: ResNet50 + scSE + Dropout(p=0.5)")
             encoder = "resnet50"
             attn_type = "scse"
-
+            
         model = ResUnet(
             encoder_name=encoder, 
             encoder_weights=None,  # 推論時設為 None，因為我們會載入 checkpoint
@@ -115,6 +114,7 @@ def main():
                 nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
                 old_head
             )
+    
     elif args.version == "v3":
         encoder = "efficientnet-b3"
         attn_type = "scse"
@@ -127,6 +127,7 @@ def main():
             decoder_attention_type=attn_type,
             classes=1
         ).to(DEVICE)
+    
     else:
         print("[Error] Unsupported Version")
         return
@@ -159,6 +160,7 @@ def main():
         dice_scores = []
         iou_scores = []
         recall_scores = []
+        precision_scores = []
         
         for i in tqdm(range(len(dataset)), desc=f"Evaluating {ds}"):
             img_tensor, mask_tensor = dataset[i]
@@ -180,22 +182,26 @@ def main():
             dice = calculate_dice(pred_tensor, gt_tensor)
             iou = calculate_iou(pred_tensor, gt_tensor)
             recall = calculate_recall(pred_tensor, gt_tensor)
+            precision = calculate_precision(pred_tensor, gt_tensor)
             
             dice_scores.append(dice)
             iou_scores.append(iou)
             recall_scores.append(recall)
+            precision_scores.append(precision)
         
         # 統計該資料集的平均分
         mean_dice = np.mean(dice_scores)
         mean_iou = np.mean(iou_scores)
         mean_recall = np.mean(recall_scores)
+        mean_precision = np.mean(precision_scores)
         
-        print(f"   -> {ds}: Dice={mean_dice:.4f}, IoU={mean_iou:.4f}, Recall={mean_recall: .4f}")
+        print(f"   -> {ds}: Dice={mean_dice:.4f}, IoU={mean_iou:.4f}, Recall={mean_recall: .4f}, Precision={mean_precision: .4f}")
         
         final_report[ds] = {
             "mean_dice": float(mean_dice),
             "mean_iou": float(mean_iou),
             "mean_recall": float(mean_recall),
+            "mean_precision": float(mean_precision),
             "samples": len(dataset)
         }
     
@@ -204,14 +210,16 @@ def main():
         all_dice = np.mean([d["mean_dice"] for d in final_report.values()])
         all_iou = np.mean([d["mean_iou"] for d in final_report.values()])
         all_recall = np.mean([d["mean_recall"] for d in final_report.values()])
+        all_precision = np.mean([d["mean_precision"] for d in final_report.values()])
         
         final_report["all"] = {
             "mean_dice": float(all_dice),
             "mean_iou": float(all_iou),
-            "mean_recall": float(all_recall)
+            "mean_recall": float(all_recall),
+            "mean_precision": float(all_precision)
         }
         print(f"\n================ Summary ================")
-        print(f" ALL DATASETS: Dice={all_dice:.4f}, IoU={all_iou:.4f}, Recall={all_recall:.4f}")
+        print(f" ALL DATASETS: Dice={all_dice:.4f}, IoU={all_iou:.4f}, Recall={all_recall:.4f}, Precision={all_precision:.4f}")
     
     with open(output_json_path, "w") as f:
         json.dump(final_report, f, indent=4)

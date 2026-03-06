@@ -78,7 +78,7 @@ def main():
         return
     
     plt.style.use("ggplot")
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(24, 6))
+    fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize=(24, 6))
     
     epochs = df["epoch"]
     
@@ -105,23 +105,33 @@ def main():
     # 3. Val Recall Score Curve
     ax3.plot(epochs, df["val_recall"], label="Val Recall", color="royalblue", linewidth=1, linestyle="-", marker="o")
     ax3.set_title(f"Validation Recall per Epoch ({args.version} - {args.run_name})")
-    ax2.set_xlabel("Epoch")
-    ax2.set_ylabel("Recall")
-    ax2.legend()
-    ax2.grid(True)
+    ax3.set_xlabel("Epoch")
+    ax3.set_ylabel("Recall")
+    ax3.legend()
+    ax3.grid(True)
     
     highlight_max(ax3, epochs, df["val_recall"])
     
-    # 4. Loss Curve
-    ax4.plot(epochs, df["train_loss"], label="Train Loss", color="tab:orange", linewidth=2, linestyle="--")
-    ax4.plot(epochs, df["val_loss"], label="Val Loss", color="royalblue", linewidth=2, linestyle="-", marker="o", markersize=4)
-    ax4.set_title(f"Loss Curve ({args.version} - {args.run_name})")
+    # 4. Val Precision Score Curve
+    ax4.plot(epochs, df["val_precision"], label="Val Recall", color="royalblue", linewidth=1, linestyle="-", marker="o")
+    ax4.set_title(f"Validation Precision per Epoch ({args.version} - {args.run_name})")
     ax4.set_xlabel("Epoch")
-    ax4.set_ylabel("Loss")
+    ax4.set_ylabel("Precision")
     ax4.legend()
     ax4.grid(True)
     
-    highlight_min(ax4, epochs, df["val_loss"])
+    highlight_max(ax4, epochs, df["val_precision"])
+    
+    # 5. Loss Curve
+    ax5.plot(epochs, df["train_loss"], label="Train Loss", color="tab:orange", linewidth=2, linestyle="--")
+    ax5.plot(epochs, df["val_loss"], label="Val Loss", color="royalblue", linewidth=2, linestyle="-", marker="o", markersize=4)
+    ax5.set_title(f"Loss Curve ({args.version} - {args.run_name})")
+    ax5.set_xlabel("Epoch")
+    ax5.set_ylabel("Loss")
+    ax5.legend()
+    ax5.grid(True)
+    
+    highlight_min(ax5, epochs, df["val_loss"])
     
     
     save_path = os.path.join(out_fig_dir, f"plot")

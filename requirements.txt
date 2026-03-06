@@ -18,3 +18,8 @@ albumentations
 
 # config & utils
 pyyaml
+
+# Web Server
+fastapi
+uvicorn
+python-multipart

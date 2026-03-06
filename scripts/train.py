@@ -102,7 +102,7 @@ def main():
     if not os.path.exists(log_path):
         with open(log_path, mode="w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["epoch", "train_loss", "val_loss", "val_dice", "val_iou", "val_recall"])
+            writer.writerow(["epoch", "train_loss", "val_loss", "val_dice", "val_iou", "val_recall", "val_precision"])
     
     # 2. 準備資料集 (Dataset & DataLoader)
     print(f"[INFO] Loading Data from {DATA_ROOT_DIR} with datasets: {args.datasets}...")
@@ -200,6 +200,7 @@ def main():
         val_dice = val_dict["val_dice"]
         val_iou = val_dict["val_iou"]
         val_recall = val_dict["val_recall"]
+        val_precision = val_dict["val_precision"]
         
         # --- [新增] 手動檢查並更新 Scheduler ---
         # 1. 先紀錄舊的 Learning Rate
@@ -218,7 +219,8 @@ def main():
               f"Val Loss: {val_loss:.4f} | "
               f"Val Dice: {val_dice:.4f} | "
               f"Val IoU: {val_iou:.4f} | "
-              f"Val Recall: {val_recall:.4f} | ")
+              f"Val Recall: {val_recall:.4f} | "
+              f"Val Precision: {val_precision:.4f}")
         
         is_best = val_dice > best_score
         if is_best:
@@ -226,7 +228,7 @@ def main():
         
         with open(log_path, mode="a", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([f"{epoch}", f"{train_loss: .4f}", f"{val_loss: .4f}", f"{val_dice: .4f}", f"{val_iou: .4f}", f"{val_recall: .4f}"])
+            writer.writerow([f"{epoch}", f"{train_loss: .4f}", f"{val_loss: .4f}", f"{val_dice: .4f}", f"{val_iou: .4f}", f"{val_recall: .4f}", f"{val_precision: .4f}"])
         
         checkpoint = {
             "epoch": epoch,
@@ -234,7 +236,8 @@ def main():
             "optimizer": optimizer.state_dict(),
             "dice": val_dice,
             "iou": val_iou,
-            "recall": val_recall
+            "recall": val_recall,
+            "precision": val_precision
         }
         
         save_checkpoint(checkpoint, is_best, checkpoint_dir)

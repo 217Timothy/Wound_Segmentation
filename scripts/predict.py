@@ -24,7 +24,7 @@ from src.datasets import get_val_transforms
 # ==========================================
 # 設定參數與參數解析器 (Configuration and ArgParse)
 # ==========================================
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 IMAGE_SIZE = 512
 
 def get_args():
