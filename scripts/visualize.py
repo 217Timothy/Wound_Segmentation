@@ -78,7 +78,7 @@ def main():
         return
     
     plt.style.use("ggplot")
-    fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize=(24, 6))
+    fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize=(40, 6))
     
     epochs = df["epoch"]
     

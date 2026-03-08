@@ -78,6 +78,7 @@ def main():
     
     if args.version == "v1":
         model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+    
     elif args.version == "v2":
         # 情境 a: Run 2 (ResNet34 + None)
         if "run2" in args.run_name:
@@ -95,7 +96,7 @@ def main():
             print("[INFO] configuration: ResNet50 + scSE + Dropout(p=0.5)")
             encoder = "resnet50"
             attn_type = "scse"
-
+        
         model = ResUnet(
             encoder_name=encoder, 
             encoder_weights=None,  # 推論時設為 None，因為我們會載入 checkpoint
@@ -109,6 +110,7 @@ def main():
                 nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
                 old_head
             )
+    
     elif args.version == "v3":
         encoder = "efficientnet-b3"
         attn_type = "scse"
@@ -121,6 +123,7 @@ def main():
             decoder_attention_type=attn_type,
             classes=1
         ).to(DEVICE)
+    
     else:
         print("[Error] Unsupported Version")
         return

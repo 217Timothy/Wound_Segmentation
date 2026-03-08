@@ -163,7 +163,7 @@ def main():
     print(model)
     
     compiled_model = model
-    loss_func = FocalTverskyLoss()
+    loss_func = FocalTverskyLoss(alpha=0.4, beta=0.6)
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
