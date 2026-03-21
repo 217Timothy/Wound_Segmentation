@@ -8,6 +8,7 @@ __pycache__/
 
 # Data
 data
+data_raw
 
 # Outputs
 results

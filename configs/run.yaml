@@ -1,5 +1,5 @@
 version: "v3"
-run_name: "run3"
+run_name: "run3-2"
 datasets:
   - "WoundSeg"
   - "CO2Wound"

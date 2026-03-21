@@ -39,7 +39,7 @@ def get_args():
                         help="資料集名稱")
     
     # 輸入與輸出根目錄
-    parser.add_argument("--in_root", type=str, default="data/processed",
+    parser.add_argument("--in_root", type=str, default="data",
                         help="輸入圖片的資料夾路徑")
     parser.add_argument("--out_root", type=str, default="results",
                         help="輸出結果的根目錄")

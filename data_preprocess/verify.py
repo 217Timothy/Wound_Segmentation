@@ -8,7 +8,7 @@ from tqdm import tqdm
 # ===========================
 # 設定區
 # ===========================
-PROCESSED_ROOT = "data/processed"   # 讀取處理好的資料
+PROCESSED_ROOT = "data"   # 讀取處理好的資料
 OUTPUT_ROOT = "results/sanity_check" # 輸出檢查圖的位置
 os.makedirs(os.path.join(OUTPUT_ROOT), exist_ok=True)
 SAMPLES_NUM = 8
@@ -39,7 +39,7 @@ def verify_dataset():
         print(f"❌ 找不到 {PROCESSED_ROOT}，請先執行前處理！")
         return
     
-    datasets = ["WoundSeg", "CO2Wound", "FootUlcer"]
+    datasets = ["WoundSeg", "CO2Wound", "FootUlcer", "TKR"]
     splits = ["train", "val"]
     
     for ds in datasets:

@@ -123,7 +123,7 @@ def main():
     img_list = user_input.split(" ")
     img_list = [name + ".jpg" for name in img_list]
     for img_name in img_list:
-        img_path = os.path.join("data", "raw", "test", "ncku", img_name)
+        img_path = os.path.join("data_raw", "test", "ncku", img_name)
         img_bgr = cv2.imread(img_path)
         if img_bgr is None: 
             print("image not found")

@@ -8,14 +8,13 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
-import albumentations as A
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
 from src.models import UNet, ResUnet, EfficientUnet
-from src.datasets import SegmentationDataset, get_train_transforms, get_val_transforms
+from src.datasets import SegmentationDataset, TKRDataset, get_train_transforms, get_tkr_finetune_train_transforms, get_val_transforms
 from src.losses import BCEDiceLoss, BCETverskyLoss, FocalTverskyLoss
 from src.utils.seed import seed_everything
 from src.utils.checkpoint import save_checkpoint, load_checkpoint
@@ -27,210 +26,417 @@ from src.engine import train_one_epoch, validate
 # ==========================================
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 IMAGE_SIZE = 512
-PIN_MEMORY = True
+PIN_MEMORY = torch.cuda.is_available()
 
 # 資料路徑
-DATA_ROOT_DIR = "data/processed"
+DATA_ROOT_DIR = "data"
 
 def get_args():
     conf_parser = argparse.ArgumentParser(add_help=False)
     conf_parser.add_argument("--config", type=str, default=None, help="Path to config file")
     known_args, remaining_args = conf_parser.parse_known_args()
-    
+
     defaults = {}
     if known_args.config and os.path.exists(known_args.config):
         print(f"[INFO] Loading defaults from config: {known_args.config}")
-        with open(known_args.config, mode='r') as f:
+        with open(known_args.config, mode="r") as f:
             defaults = yaml.safe_load(f)
-    
+
     parser = argparse.ArgumentParser(parents=[conf_parser])
-    
-    # 必要參數：模型版本與資料集
-    parser.add_argument("--version", type=str,
-                        help="這次訓練的版本")
-    parser.add_argument("--run_name", type=str,
-                        help="這次訓練的名稱")
-    parser.add_argument("--datasets", type=str, nargs="+", 
-                        help="輸入一個或多個資料集名稱 (用空白隔開，如WoundSeg CO2Wound)")
-    
-    # Hyperparameter
-    parser.add_argument("--epochs", type=int,
-                        help="輸入想訓練的 epoch 數")
-    parser.add_argument("--lr", type=float,
-                        help="輸入想訓練的學習數")
-    parser.add_argument("--batch_size", type=int,
-                        help="輸入想訓練的 batch size")
-    parser.add_argument("--num_workers", type=int,
-                        help="輸入想訓練的 worker 數")
-    
+
+    # 基本參數
+    parser.add_argument("--version", type=str, help="模型版本，例如 v1 / v2 / v3")
+    parser.add_argument("--run_name", type=str, help="這次訓練的名稱")
+    parser.add_argument("--datasets", type=str, nargs="+", help="資料集名稱，例如 TKR 或 WoundSeg CO2Wound")
+
+    # Hyperparameters
+    parser.add_argument("--epochs", type=int, help="epoch 數")
+    parser.add_argument("--lr", type=float, help="learning rate")
+    parser.add_argument("--batch_size", type=int, help="batch size")
+    parser.add_argument("--num_workers", type=int, help="DataLoader workers")
+
+    # Fine-tune 相關
+    parser.add_argument("--pretrained_ckpt", type=str, default=None, help="fine-tune 用的預訓練 checkpoint")
+    parser.add_argument("--freeze_encoder_epochs", type=int, default=0, help="前幾個 epochs 凍結 encoder")
+    parser.add_argument("--grad_clip", type=float, default=1.0, help="gradient clipping max norm")
+    parser.add_argument("--cache_data", action="store_true", help="是否先將資料載入 RAM")
+    parser.add_argument("--no_cache_data", action="store_true", help="不要將資料載入 RAM")
+
+    # loss 選項
+    parser.add_argument("--loss_name", type=str, default="bce_dice", help="bce_dice / bce_tversky / focal_tversky")
+
     parser.set_defaults(**defaults)
     args = parser.parse_args(remaining_args)
-    
     return args
+
+
+def freeze_encoder(model):
+    """
+    只對 SMP-based model 有效（ResUnet / EfficientUnet）
+    """
+    if hasattr(model, "model") and hasattr(model.model, "encoder"):
+        for param in model.model.encoder.parameters():
+            param.requires_grad = False
+        print("[INFO] Encoder frozen.")
+
+
+def unfreeze_encoder(model):
+    """
+    只對 SMP-based model 有效（ResUnet / EfficientUnet）
+    """
+    if hasattr(model, "model") and hasattr(model.model, "encoder"):
+        for param in model.model.encoder.parameters():
+            param.requires_grad = True
+        print("[INFO] Encoder unfrozen.")
+
+
+def load_pretrained_finetune(model, ckpt_path, device):
+    """
+    載入舊 checkpoint 做 fine-tune
+    只載入 key 存在且 shape 相同的權重
+    """
+    if ckpt_path is None:
+        print("[INFO] No pretrained checkpoint provided.")
+        return
+
+    if not os.path.exists(ckpt_path):
+        print(f"[WARN] Pretrained checkpoint not found: {ckpt_path}")
+        return
+
+    print(f"[INFO] Loading pretrained checkpoint from: {ckpt_path}")
+    ckpt = torch.load(ckpt_path, map_location=device)
+
+    state_dict = ckpt["state_dict"] if "state_dict" in ckpt else ckpt
+    model_dict = model.state_dict()
+
+    matched_dict = {}
+    skipped = []
+
+    for k, v in state_dict.items():
+        if k in model_dict and model_dict[k].shape == v.shape:
+            matched_dict[k] = v
+        else:
+            skipped.append(k)
+
+    model_dict.update(matched_dict)
+    model.load_state_dict(model_dict, strict=False)
+
+    print(f"[INFO] Loaded {len(matched_dict)} matched layers.")
+    if len(skipped) > 0:
+        print(f"[INFO] Skipped {len(skipped)} unmatched layers.")
+
+
+def build_dataset(dataset_names, split, transform, cache_data):
+    if dataset_names == ["TKR"]:
+        return TKRDataset(
+            root_dir=DATA_ROOT_DIR,
+            ds="TKR",
+            split=split,
+            transform=transform,
+            cache_data=cache_data
+        )
+    else:
+        return SegmentationDataset(
+            root_dir=DATA_ROOT_DIR,
+            datasets=dataset_names,
+            split=split,
+            transform=transform,
+            cache_data=cache_data
+        )
+
+
+def build_model(version: str):
+    print("[INFO] Initializing Model...")
+
+    if version == "v1":
+        model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+
+    elif version == "v2":
+        model = ResUnet(
+            encoder_name="resnet50",
+            encoder_weights="imagenet",
+            decoder_attention_type="scse",
+            classes=1
+        ).to(DEVICE)
+
+        old_head = model.model.segmentation_head
+        model.model.segmentation_head = nn.Sequential( # type: ignore
+            nn.Dropout2d(p=0.3),
+            old_head
+        )
+
+    elif version == "v3":
+        model = EfficientUnet(
+            encoder_name="efficientnet-b3",
+            encoder_weights="imagenet",
+            decoder_attention_type="scse",
+            classes=1
+        ).to(DEVICE)
+
+    else:
+        raise ValueError(f"Unsupported version: {version}")
+
+    return model
+
+
+def build_loss(loss_name: str):
+    loss_name = loss_name.lower()
+
+    if loss_name == "bce_dice":
+        return BCEDiceLoss()
+    elif loss_name == "bce_tversky":
+        return BCETverskyLoss(alpha=0.4, beta=0.6)
+    elif loss_name == "focal_tversky":
+        return FocalTverskyLoss(alpha=0.4, beta=0.6)
+    else:
+        raise ValueError(f"Unsupported loss_name: {loss_name}")
+
 
 def main():
     args = get_args()
+
     seed_everything()
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.benchmark = torch.cuda.is_available()
+    if args.pretrained_ckpt is not None:
+        print("[INFO] Running in fine-tune mode.\n")
+    else:
+        print("[INFO] Running in training-from-scratch mode.\n")
     print(f"[INFO] Version: {args.version}")
-    print(f"[INFO] Running Name: {args.run_name}")
-    print(f"[INFO] Using Device: {DEVICE}")
-    print(f"[INFO] Using Datasets: {args.datasets}")
-    print(f"[INFO] Running Epochs: {args.epochs}")
-    print(f"[INFO] Using Learning Rate: {args.lr}")
-    print(f"[INFO] Using Batch Size: {args.batch_size}")
-    print(f"[INFO] Using Number of Workers: {args.num_workers}")
+    print(f"[INFO] Run Name: {args.run_name}")
+    print(f"[INFO] Device: {DEVICE}")
+    print(f"[INFO] Datasets: {args.datasets}")
+    print(f"[INFO] Epochs: {args.epochs}")
+    print(f"[INFO] Learning Rate: {args.lr}")
+    print(f"[INFO] Batch Size: {args.batch_size}")
+    print(f"[INFO] Num Workers: {args.num_workers}")
+    print(f"[INFO] Pretrained CKPT: {args.pretrained_ckpt}")
+    print(f"[INFO] Freeze Encoder Epochs: {args.freeze_encoder_epochs}")
+    print(f"[INFO] Grad Clip: {args.grad_clip}")
+    print(f"[INFO] Cache Data: {args.cache_data}")
+    print(f"[INFO] Loss Name: {args.loss_name}")
     
     
+    # ==========================================
+    # 2. 存 config
+    # ==========================================
     out_config_dir = os.path.join("results", "runs", args.version, args.run_name)
     os.makedirs(out_config_dir, exist_ok=True)
-    config_path = os.path.join(out_config_dir, f"config.yaml")
-    
+    config_path = os.path.join(out_config_dir, "config.yaml")
+
     config_dict = vars(args)
-    config_dict["model_class"] = "UNet"
-    config_dict["loss_func"] = "FocalTverskyLoss"
-    with open(config_path, 'w') as f:
+    config_dict["device"] = DEVICE
+    with open(config_path, "w") as f:
         yaml.dump(config_dict, f, sort_keys=False, indent=4)
 
     print(f"[INFO] Configuration saved to: {config_path}\n")
     
+    # ==========================================
+    # 3. logs / checkpoints
+    # ==========================================
     checkpoint_dir = os.path.join("checkpoints", args.version, args.run_name)
     log_dir = os.path.join("logs", args.version)
     os.makedirs(checkpoint_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
-    log_path = f"{log_dir}/{args.run_name}.csv"
+
+    log_path = os.path.join(log_dir, f"{args.run_name}.csv")
     if not os.path.exists(log_path):
         with open(log_path, mode="w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["epoch", "train_loss", "val_loss", "val_dice", "val_iou", "val_recall", "val_precision"])
+            writer.writerow([
+                "epoch",
+                "train_loss",
+                "val_loss",
+                "val_dice",
+                "val_iou",
+                "val_recall",
+                "val_precision"
+            ])
     
-    # 2. 準備資料集 (Dataset & DataLoader)
+    # ==========================================
+    # 4. Dataset / DataLoader
+    # ==========================================
     print(f"[INFO] Loading Data from {DATA_ROOT_DIR} with datasets: {args.datasets}...")
-    train_ds = SegmentationDataset(
-        root_dir=DATA_ROOT_DIR,
-        datasets=args.datasets,
-        split="train",
-        transform=get_train_transforms(),
-        cache_data=True
-    )
-    
-    val_ds = SegmentationDataset(
-        root_dir=DATA_ROOT_DIR,
-        datasets=args.datasets,
+
+    if args.pretrained_ckpt is not None:
+        train_ds = build_dataset(
+            dataset_names=args.datasets,
+            split="train",
+            transform=get_tkr_finetune_train_transforms((IMAGE_SIZE, IMAGE_SIZE)),
+            cache_data=args.cache_data
+        )
+    else:
+        train_ds = build_dataset(
+            dataset_names=args.datasets,
+            split="train",
+            transform=get_train_transforms((IMAGE_SIZE, IMAGE_SIZE)),
+            cache_data=args.cache_data
+        )
+
+    val_ds = build_dataset(
+        dataset_names=args.datasets,
         split="val",
-        transform=get_val_transforms(),
-        cache_data=True
+        transform=get_val_transforms((IMAGE_SIZE, IMAGE_SIZE)),
+        cache_data=args.cache_data
     )
-    
+
     print(f"✅ Training samples: {len(train_ds)}")
     print(f"✅ Validation samples: {len(val_ds)}\n")
-    
+
+    use_persistent_workers = args.num_workers > 0
+
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=PIN_MEMORY,
-        persistent_workers=True,
-        prefetch_factor=4,
+        persistent_workers=use_persistent_workers,
+        prefetch_factor=4 if args.num_workers > 0 else None,
         shuffle=True,
     )
-    
+
     val_loader = DataLoader(
         val_ds,
         batch_size=1,
-        num_workers=4,
+        num_workers=args.num_workers,
         pin_memory=PIN_MEMORY,
-        persistent_workers=True,
+        persistent_workers=use_persistent_workers,
         shuffle=False,
     )
     
-    # 3. 初始化模型
-    print("[INFO] Initializing Model...")
-    if args.version == "v1":
-        model = UNet(n_channels=3, n_classes=1).to(DEVICE)
-    elif args.version == "v2":
-        model = ResUnet(encoder_name="resnet50", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
-        old_head = model.model.segmentation_head
-        model.model.segmentation_head = nn.Sequential( # type: ignore
-            nn.Dropout2d(p=0.3),    # 隨機丟棄 30% 的特徵圖，強迫模型學習更魯棒的特徵
-            old_head
-        )
-    elif args.version == "v3":
-        model = EfficientUnet(encoder_name="efficientnet-b3", encoder_weights="imagenet", decoder_attention_type="scse", classes=1).to(DEVICE)
-    else:
-        print("[Error] Unsupported Version")
-        return
+    # ==========================================
+    # 5. 初始化模型 / loss / optimizer
+    # ==========================================
+    model = build_model(args.version)
     print(model)
-    
-    compiled_model = model
-    loss_func = FocalTverskyLoss(alpha=0.4, beta=0.6)
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
+
+    load_pretrained_finetune(model, args.pretrained_ckpt, DEVICE)
+
+    encoder_unfrozen = False
+    if args.freeze_encoder_epochs > 0:
+        freeze_encoder(model)
+
+    loss_func = build_loss(args.loss_name)
+
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=1e-4
+    )
+
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
         T_max=args.epochs,
         eta_min=1e-6
     )
+
     scaler = GradScaler(device="cuda", enabled=(DEVICE == "cuda"))
-    if torch.cuda.is_available() and DEVICE == 'cuda':
+
+    compiled_model = model
+    if torch.cuda.is_available() and DEVICE == "cuda":
         compiled_model = torch.compile(model, mode="reduce-overhead")
     
     
+    # ==========================================
+    # 6. resume
+    # ==========================================
     best_score = 0.0
     start_epoch = 1
-    
+
     best_checkpoint_path = os.path.join(checkpoint_dir, "best.pt")
     if os.path.exists(best_checkpoint_path):
         best_ckpt = torch.load(best_checkpoint_path, map_location="cpu")
         best_score = best_ckpt.get("dice", 0.0)
-        print(f"[INFO] Detected existing best model with Dice: {best_score:.4f}")
-    
+        print(f"[INFO] Existing best model Dice: {best_score:.4f}")
+
     checkpoint_resume_path = os.path.join(checkpoint_dir, "last.pt")
     if os.path.exists(checkpoint_resume_path):
-        print(f"[INFO] Resuming training from {checkpoint_resume_path}\n")
+        print(f"[INFO] Resuming training from {checkpoint_resume_path}")
         load_checkpoint(checkpoint_resume_path, model, optimizer)
         last_ckpt = torch.load(checkpoint_resume_path, map_location="cpu")
-        print(f"Last Run: Epoch: {last_ckpt['epoch']}, Dice Score: {last_ckpt['dice']: .4f}, IoU Score: {last_ckpt['iou']: .4f}\n")
+        print(
+            f"[INFO] Last Run => Epoch: {last_ckpt['epoch']}, "
+            f"Dice: {last_ckpt['dice']:.4f}, IoU: {last_ckpt['iou']:.4f}"
+        )
         start_epoch = last_ckpt["epoch"] + 1
     
-    # 4. 開始訓練
+    # ==========================================
+    # 7. Train Loop
+    # ==========================================
     for epoch in range(start_epoch, args.epochs + 1):
-        train_loss = train_one_epoch(compiled_model, train_loader=train_loader, optimizer=optimizer, scaler=scaler, loss_func=loss_func, device=DEVICE, epoch=epoch)
-        
+
+        if (
+            (not encoder_unfrozen)
+            and (epoch > args.freeze_encoder_epochs)
+            and (args.freeze_encoder_epochs > 0)
+        ):
+            unfreeze_encoder(model)
+            encoder_unfrozen = True
+
+            optimizer = optim.AdamW(
+                model.parameters(),
+                lr=args.lr,
+                weight_decay=1e-4
+            )
+
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                optimizer=optimizer,
+                T_max=args.epochs - epoch + 1,
+                eta_min=1e-6
+            )
+
+            print("[INFO] Rebuilt optimizer/scheduler after unfreezing encoder.")
+
+        train_loss = train_one_epoch(
+            compiled_model,
+            train_loader=train_loader,
+            optimizer=optimizer,
+            scaler=scaler,
+            loss_func=loss_func,
+            device=DEVICE,
+            epoch=epoch,
+            grad_clip=args.grad_clip
+        )
+
         val_dict = validate(compiled_model, val_loader, loss_func, DEVICE)
         val_loss = val_dict["val_loss"]
         val_dice = val_dict["val_dice"]
         val_iou = val_dict["val_iou"]
         val_recall = val_dict["val_recall"]
         val_precision = val_dict["val_precision"]
-        
-        # --- [新增] 手動檢查並更新 Scheduler ---
-        # 1. 先紀錄舊的 Learning Rate
-        current_lr = optimizer.param_groups[0]['lr']
 
-        # 2. 更新 Scheduler
+        current_lr = optimizer.param_groups[0]["lr"]
         scheduler.step()
+        new_lr = optimizer.param_groups[0]["lr"]
 
-        # 3. 檢查更新後的 Learning Rate 是否變小 (代表被觸發了)
-        new_lr = optimizer.param_groups[0]['lr']
         if new_lr < current_lr:
             print(f"📉 [Scheduler] Learning Rate reduced from {current_lr:.2e} to {new_lr:.2e}")
-        
-        print(f"Epoch [{epoch}/{args.epochs}] | "
-              f"Train Loss: {train_loss:.4f} | "
-              f"Val Loss: {val_loss:.4f} | "
-              f"Val Dice: {val_dice:.4f} | "
-              f"Val IoU: {val_iou:.4f} | "
-              f"Val Recall: {val_recall:.4f} | "
-              f"Val Precision: {val_precision:.4f}")
-        
+
+        print(
+            f"Epoch [{epoch}/{args.epochs}] | "
+            f"Train Loss: {train_loss:.4f} | "
+            f"Val Loss: {val_loss:.4f} | "
+            f"Val Dice: {val_dice:.4f} | "
+            f"Val IoU: {val_iou:.4f} | "
+            f"Val Recall: {val_recall:.4f} | "
+            f"Val Precision: {val_precision:.4f}"
+        )
+
         is_best = val_dice > best_score
         if is_best:
             best_score = val_dice
-        
+
         with open(log_path, mode="a", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([f"{epoch}", f"{train_loss: .4f}", f"{val_loss: .4f}", f"{val_dice: .4f}", f"{val_iou: .4f}", f"{val_recall: .4f}", f"{val_precision: .4f}"])
-        
+            writer.writerow([
+                f"{epoch}",
+                f"{train_loss:.4f}",
+                f"{val_loss:.4f}",
+                f"{val_dice:.4f}",
+                f"{val_iou:.4f}",
+                f"{val_recall:.4f}",
+                f"{val_precision:.4f}"
+            ])
+
         checkpoint = {
             "epoch": epoch,
             "state_dict": model.state_dict(),
@@ -240,7 +446,7 @@ def main():
             "recall": val_recall,
             "precision": val_precision
         }
-        
+
         save_checkpoint(checkpoint, is_best, checkpoint_dir)
 
 
