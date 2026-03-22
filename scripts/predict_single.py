@@ -1,13 +1,10 @@
 import os
 import sys
 import argparse
-import glob
 import torch
 import torch.nn as nn
 import cv2
 import numpy as np
-import albumentations as A
-import albumentations.pytorch as ToTensorV2
 
 
 
@@ -39,8 +36,9 @@ def get_args():
 def main():
     args = get_args()
     
+    user_input_img_dir = input("Please enter the image dir(ex. tkr, ncku): ")
     checkpoint_path = os.path.join("checkpoints", args.version, args.run_name, "best.pt")
-    base_out_dir = "result_single"
+    base_out_dir = f"result_single/{user_input_img_dir}"
     pred_dir = os.path.join(base_out_dir, "predictions")
     viz_dir = os.path.join(base_out_dir, "visualizations")
     overlay_dir = os.path.join(viz_dir, "overlay")
@@ -119,11 +117,11 @@ def main():
     
     
     # 3. 照片預處理
-    user_input = input("Please enter the image name(ex. ncku_001): ")
-    img_list = user_input.split(" ")
+    user_input_img_name = f"{user_input_img_dir}_{input("Please enter the image name(ex. 001): ")}"
+    img_list = user_input_img_name.split(" ")
     img_list = [name + ".jpg" for name in img_list]
     for img_name in img_list:
-        img_path = os.path.join("data_raw", "test", "ncku", img_name)
+        img_path = os.path.join("data_raw", "test", user_input_img_dir, img_name)
         img_bgr = cv2.imread(img_path)
         if img_bgr is None: 
             print("image not found")

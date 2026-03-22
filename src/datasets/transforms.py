@@ -44,9 +44,9 @@ def get_tkr_finetune_train_transforms(img_size=(512, 512)):
     return A.Compose([
         A.Resize(height=img_size[1], width=img_size[0]),
 
-        # 幾何增強：保守
+        A.RandomRotate90(p=0.5),
         A.HorizontalFlip(p=0.5),
-        A.Rotate(limit=30, p=0.5),
+
         A.ShiftScaleRotate(
             shift_limit=0.03,
             scale_limit=0.05,
@@ -55,7 +55,6 @@ def get_tkr_finetune_train_transforms(img_size=(512, 512)):
             p=0.3
         ),
 
-        # 顏色增強：輕量
         A.RandomBrightnessContrast(
             brightness_limit=0.15,
             contrast_limit=0.15,

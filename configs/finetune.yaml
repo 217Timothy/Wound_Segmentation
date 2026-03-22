@@ -3,12 +3,12 @@ run_name: tkr_finetune_run1
 datasets: ["TKR"]
 
 epochs: 40
-lr: 0.0001
+lr: 0.00005
 batch_size: 8
 num_workers: 8
 
-pretrained_ckpt: checkpoints/v3/run3-1/best.pt
-freeze_encoder_epochs: 3
+pretrained_ckpt: checkpoints/v3/tkr_finetune_run1/best.pt
+freeze_encoder_epochs: 2
 grad_clip: 1.0
 cache_data: true
 loss_name: bce_dice
