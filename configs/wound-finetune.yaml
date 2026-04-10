@@ -1,0 +1,31 @@
+# =========================
+# Basic
+# =========================
+version: v3
+run_name: finetune_dfu_chronic_abrasion
+datasets: [DFU, Chronic, Abrasion]
+
+# =========================
+# Training
+# =========================
+epochs: 30
+batch_size: 8
+num_workers: 4
+
+# =========================
+# Optimizer
+# =========================
+lr: 5e-4 # 🔥 finetune 必須低
+loss_name: focal_tversky
+
+# =========================
+# Finetune
+# =========================
+pretrained_ckpt: checkpoints/v3_best.pt
+freeze_encoder_epochs: 5
+
+# =========================
+# Misc
+# =========================
+grad_clip: 1.0
+cache_data: true

@@ -1,4 +1,5 @@
 import os
+import random
 import cv2
 import shutil
 import numpy as np
@@ -18,8 +19,16 @@ TARGET_SIZE = (512, 512)
 # 2. Patient-level split
 #    先用你前 20 張（4 個病患）的情況示範
 # =========================
-TRAIN_PATIENTS = ["7", "2", "3", "4", "5", "6", "9", "10", "11", "12", "13", "14", "16", "17", "19", "20"]
-VAL_PATIENTS = ["1", "8", "15", "18"]
+### Last: 44
+ALL_PATIENTS = [str(i) for i in range(1, 45)]
+
+random.seed(42)
+random.shuffle(ALL_PATIENTS)
+
+split_idx = int(len(ALL_PATIENTS) * 0.8)
+
+TRAIN_PATIENTS = ALL_PATIENTS[:split_idx]
+VAL_PATIENTS = ALL_PATIENTS[split_idx:]
 TEST_PATIENTS = []
 
 

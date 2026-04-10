@@ -1,0 +1,20 @@
+version: v3
+run_name: wound_base
+datasets: ["Abrasions", "Burns", "Cut", "Laceration", "Stab_wound"]
+
+in_root: data_raw/Wound_dataset
+out_root: results
+split: test
+
+input_mode: flat
+
+threshold: 0.5
+delete: 1
+
+use_postprocess: 1
+min_area: 200
+closing_kernel: 7
+dilate_iter: 0
+blur_kernel: 7
+blur_sigma: 0
+open_kernel: 0

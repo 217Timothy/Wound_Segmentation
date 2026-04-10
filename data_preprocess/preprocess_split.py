@@ -8,10 +8,10 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 
 
-RAW_ROOT = "data/raw"
+RAW_ROOT = "data_raw"
 LABELED_ROOT = f"{RAW_ROOT}/labeled"
 TEST_ROOT = f"{RAW_ROOT}/test"
-OUT_ROOT = "data/processed"
+OUT_ROOT = "data"
 TARGET_SIZE = (512, 512)
 PREFIX_MAP = {
     "WoundSeg": "WS",
