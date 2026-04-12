@@ -2,13 +2,13 @@
 # Dataset
 # =========================
 version: wound-finetune-v1
-run_name: run1
+run_name: run2
 datasets: [DFU, Cut, Laceration, Abrasion, Chronic]
 
 # =========================
 # Finetune
 # =========================
-pretrained_ckpt: checkpoints/v3/run1/best.pt
+pretrained_ckpt: checkpoints/wound-finetune-v1/run1/best.pt
 
 # =========================
 # Training
