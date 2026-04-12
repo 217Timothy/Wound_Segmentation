@@ -22,12 +22,11 @@ from src.engine import train_one_epoch, validate
 # ==========================================
 # Device
 # ==========================================
-if torch.cuda.is_available():
-    DEVICE = "cuda"
-elif torch.backends.mps.is_available():
-    DEVICE = "mps"
-else:
-    DEVICE = "cpu"
+DEVICE = (
+    "cuda" if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available()
+    else "cpu"
+)
 
 IMAGE_SIZE = 512
 PIN_MEMORY = torch.cuda.is_available()
@@ -35,7 +34,7 @@ DATA_ROOT_DIR = "data"
 
 
 # ==========================================
-# Args
+# Args (支援 config.yaml)
 # ==========================================
 def get_args():
     conf_parser = argparse.ArgumentParser(add_help=False)
@@ -51,22 +50,17 @@ def get_args():
 
     parser = argparse.ArgumentParser(parents=[conf_parser])
 
-    # basic
     parser.add_argument("--version", type=str)
     parser.add_argument("--run_name", type=str)
     parser.add_argument("--datasets", type=str, nargs="+")
-
-    # finetune
     parser.add_argument("--pretrained_ckpt", type=str)
 
-    # training
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--num_workers", type=int)
     parser.add_argument("--lr", type=float)
-    parser.add_argument("--freeze_epochs", type=int, default=5)
 
-    # misc
+    parser.add_argument("--freeze_epochs", type=int, default=5)
     parser.add_argument("--grad_clip", type=float, default=1.0)
     parser.add_argument("--cache_data", action="store_true")
     parser.add_argument("--loss_name", type=str, default="focal_tversky")
@@ -80,13 +74,12 @@ def get_args():
 # Model
 # ==========================================
 def build_model():
-    model = EfficientUnet(
+    return EfficientUnet(
         encoder_name="efficientnet-b3",
-        encoder_weights=None,   # finetune 時一定用 None
+        encoder_weights=None,
         decoder_attention_type="scse",
         classes=1
     ).to(DEVICE)
-    return model
 
 
 # ==========================================
@@ -100,7 +93,7 @@ def build_loss(name):
     elif name == "focal_tversky":
         return FocalTverskyLoss(0.4, 0.6)
     else:
-        raise ValueError(f"Unsupported loss_name: {name}")
+        raise ValueError(f"Unsupported loss: {name}")
 
 
 # ==========================================
@@ -120,17 +113,15 @@ def build_dataset(dataset_names, split, transform, cache_data):
 # Freeze / Unfreeze
 # ==========================================
 def freeze_encoder(model):
-    if hasattr(model, "model") and hasattr(model.model, "encoder"):
-        for p in model.model.encoder.parameters():
-            p.requires_grad = False
-        print("[INFO] Encoder frozen")
+    for p in model.model.encoder.parameters():
+        p.requires_grad = False
+    print("[INFO] Encoder frozen")
 
 
 def unfreeze_encoder(model):
-    if hasattr(model, "model") and hasattr(model.model, "encoder"):
-        for p in model.model.encoder.parameters():
-            p.requires_grad = True
-        print("[INFO] Encoder unfrozen")
+    for p in model.model.encoder.parameters():
+        p.requires_grad = True
+    print("[INFO] Encoder unfrozen")
 
 
 # ==========================================
@@ -139,33 +130,10 @@ def unfreeze_encoder(model):
 def main():
     args = get_args()
 
-    print(f"[INFO] Using device: {DEVICE}")
-    print(f"[INFO] Version: {args.version}")
-    print(f"[INFO] Run Name: {args.run_name}")
+    print(f"[INFO] Device: {DEVICE}")
     print(f"[INFO] Datasets: {args.datasets}")
-    print(f"[INFO] Pretrained: {args.pretrained_ckpt}")
 
-    if args.pretrained_ckpt is None:
-        raise ValueError("pretrained_ckpt must be provided for finetune.py")
-
-    # ==========================================
-    # Save config
-    # ==========================================
-    out_config_dir = os.path.join("results", "runs", args.version, args.run_name)
-    os.makedirs(out_config_dir, exist_ok=True)
-
-    config_path = os.path.join(out_config_dir, "config.yaml")
-    config_dict = vars(args)
-    config_dict["device"] = DEVICE
-
-    with open(config_path, "w") as f:
-        yaml.dump(config_dict, f, sort_keys=False, indent=4)
-
-    print(f"[INFO] Configuration saved to: {config_path}")
-
-    # ==========================================
-    # Logs / Checkpoints
-    # ==========================================
+    # checkpoint / log
     checkpoint_dir = os.path.join("checkpoints", args.version, args.run_name)
     log_dir = os.path.join("logs", args.version)
 
@@ -173,21 +141,17 @@ def main():
     os.makedirs(log_dir, exist_ok=True)
 
     log_path = os.path.join(log_dir, f"{args.run_name}.csv")
+
     if not os.path.exists(log_path):
-        with open(log_path, mode="w", newline="") as f:
+        with open(log_path, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([
-                "epoch",
-                "train_loss",
-                "val_loss",
-                "val_dice",
-                "val_iou",
-                "val_recall",
-                "val_precision"
+                "epoch", "train_loss", "val_loss",
+                "global_dice", "mean_dice"
             ])
 
     # ==========================================
-    # Dataset / DataLoader
+    # Dataset
     # ==========================================
     train_ds = build_dataset(
         args.datasets,
@@ -203,19 +167,12 @@ def main():
         args.cache_data
     )
 
-    print(f"[INFO] Train size: {len(train_ds)}")
-    print(f"[INFO] Val size: {len(val_ds)}")
-
-    use_persistent_workers = args.num_workers > 0
-
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        pin_memory=PIN_MEMORY,
-        persistent_workers=use_persistent_workers,
-        prefetch_factor=4 if args.num_workers > 0 else None,
+        pin_memory=PIN_MEMORY
     )
 
     val_loader = DataLoader(
@@ -223,45 +180,38 @@ def main():
         batch_size=1,
         shuffle=False,
         num_workers=args.num_workers,
-        pin_memory=PIN_MEMORY,
-        persistent_workers=use_persistent_workers,
+        pin_memory=PIN_MEMORY
     )
 
     # ==========================================
-    # Model / Loss / Optimizer / Scheduler / Scaler
+    # Model
     # ==========================================
     model = build_model()
     loss_func = build_loss(args.loss_name)
 
-    # 載入 pretrained checkpoint
-    checkpoint = load_checkpoint(args.pretrained_ckpt, model)
+    load_checkpoint(args.pretrained_ckpt, model)
 
-    # 載入後先驗證一次，確認這真的是你原本 best model
-    print("\n[DEBUG] Validate BEFORE finetune")
+    # DEBUG（確認沒壞）
+    print("\n[DEBUG] Before Finetune")
     debug_val = validate(model, val_loader, loss_func, DEVICE)
-    print(f"[DEBUG] Dice before finetune: {debug_val['val_dice']:.4f}")
-    if "per_dataset" in debug_val:
-        for ds, m in debug_val["per_dataset"].items():
-            print(f"[DEBUG] {ds}: {m['dice']:.4f}")
+    print(f"[DEBUG] Global Dice: {debug_val['val_dice']:.4f}")
 
-    # 先 freeze encoder
+    # ==========================================
+    # Optimizer
+    # ==========================================
     freeze_encoder(model)
 
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=1e-4
-    )
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
 
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer=optimizer,
+        optimizer,
         T_max=args.epochs,
         eta_min=1e-6
     )
 
-    scaler = GradScaler(device="cuda", enabled=(DEVICE == "cuda"))
+    scaler = GradScaler(enabled=(DEVICE == "cuda"))
 
-    best_dice = 0.0
+    best_score = 0.0
     encoder_unfrozen = False
 
     # ==========================================
@@ -269,109 +219,66 @@ def main():
     # ==========================================
     for epoch in range(1, args.epochs + 1):
 
-        # 到指定 epoch 後解凍 encoder
-        if (
-            (not encoder_unfrozen)
-            and (epoch == args.freeze_epochs + 1)
-            and (args.freeze_epochs > 0)
-        ):
+        # unfreeze
+        if epoch == args.freeze_epochs + 1 and not encoder_unfrozen:
             unfreeze_encoder(model)
             encoder_unfrozen = True
 
-            optimizer = optim.AdamW(
-                model.parameters(),
-                lr=args.lr,
-                weight_decay=1e-4
-            )
+            optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
 
-            scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer=optimizer,
-                T_max=args.epochs - epoch + 1,
-                eta_min=1e-6
-            )
-
-            print("[INFO] Rebuilt optimizer/scheduler after unfreezing encoder.")
-
+        # train
         train_loss = train_one_epoch(
-            model=model,
-            train_loader=train_loader,
-            optimizer=optimizer,
-            scaler=scaler,
-            loss_func=loss_func,
-            device=DEVICE,
-            epoch=epoch,
-            grad_clip=args.grad_clip
+            model,
+            train_loader,
+            optimizer,
+            scaler,
+            loss_func,
+            DEVICE,
+            epoch,
+            args.grad_clip
         )
 
+        # validate
         val_dict = validate(model, val_loader, loss_func, DEVICE)
 
-        val_loss = val_dict["val_loss"]
-        val_dice = val_dict["val_dice"]
-        val_iou = val_dict["val_iou"]
-        val_recall = val_dict["val_recall"]
-        val_precision = val_dict["val_precision"]
+        global_dice = val_dict["val_dice"]
 
-        current_lr = optimizer.param_groups[0]["lr"]
-        scheduler.step()
-        new_lr = optimizer.param_groups[0]["lr"]
+        # 🔥 核心：mean per-dataset
+        per_ds = val_dict["per_dataset"]
+        mean_dice = sum([v["dice"] for v in per_ds.values()]) / len(per_ds)
 
-        if new_lr < current_lr:
-            print(f"📉 [Scheduler] Learning Rate reduced from {current_lr:.2e} to {new_lr:.2e}")
+        print(f"\nEpoch {epoch}")
+        print(f"Global Dice: {global_dice:.4f}")
+        print(f"Mean Per-Dataset Dice: {mean_dice:.4f}")
 
-        print(
-            f"\nEpoch {epoch} | "
-            f"Train Loss: {train_loss:.4f} | "
-            f"Val Loss: {val_loss:.4f} | "
-            f"Val Dice: {val_dice:.4f} | "
-            f"Val IoU: {val_iou:.4f} | "
-            f"Val Recall: {val_recall:.4f} | "
-            f"Val Precision: {val_precision:.4f}"
-        )
-
-        if "per_dataset" in val_dict:
-            print("\n📊 Per-Dataset Results:")
-            for ds, metrics in val_dict["per_dataset"].items():
-                print(
-                    f"{ds} → "
-                    f"Dice: {metrics['dice']:.4f} | "
-                    f"IoU: {metrics['iou']:.4f} | "
-                    f"Recall: {metrics['recall']:.4f} | "
-                    f"Precision: {metrics['precision']:.4f}"
-                )
-
-        is_best = val_dice > best_dice
+        # ==========================================
+        # 存 checkpoint（用 mean）
+        # ==========================================
+        is_best = mean_dice > best_score
         if is_best:
-            best_dice = val_dice
+            best_score = mean_dice
 
-        # save log
-        with open(log_path, mode="a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                f"{epoch}",
-                f"{train_loss:.4f}",
-                f"{val_loss:.4f}",
-                f"{val_dice:.4f}",
-                f"{val_iou:.4f}",
-                f"{val_recall:.4f}",
-                f"{val_precision:.4f}"
-            ])
-
-        # save checkpoint
-        save_state = {
+        save_checkpoint({
             "epoch": epoch,
             "state_dict": model.state_dict(),
             "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "dice": val_dice,
-            "iou": val_iou,
-            "recall": val_recall,
-            "precision": val_precision,
-            "encoder_unfrozen": encoder_unfrozen
-        }
+            "dice": mean_dice
+        }, is_best, checkpoint_dir)
 
-        save_checkpoint(save_state, is_best, checkpoint_dir)
+        # log
+        with open(log_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                epoch,
+                train_loss,
+                val_dict["val_loss"],
+                global_dice,
+                mean_dice
+            ])
 
-    print("\n✅ Finetune completed!")
+        scheduler.step()
+
+    print("\n✅ Finetune Done!")
 
 
 if __name__ == "__main__":
