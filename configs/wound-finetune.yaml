@@ -1,31 +1,26 @@
 # =========================
-# Basic
+# Dataset
 # =========================
-version: v3
-run_name: wound-finetune-run2
-datasets: [DFU, Chronic, Abrasion, "Cut", "Laceration"]
+datasets: [Cut, Laceration]
+
+# =========================
+# Finetune
+# =========================
+pretrained_ckpt: checkpoints/v3/run1/best.pt
 
 # =========================
 # Training
 # =========================
-epochs: 30
-batch_size: 8
+epochs: 50
+batch_size: 4
 num_workers: 4
 
 # =========================
 # Optimizer
 # =========================
-lr: 5e-5 # 🔥 finetune 必須低
-loss_name: bce_dice
+lr: 1e-5
 
 # =========================
-# Finetune
+# Strategy
 # =========================
-pretrained_ckpt: checkpoints/v3_best.pt
-freeze_encoder_epochs: 5
-
-# =========================
-# Misc
-# =========================
-grad_clip: 1.0
-cache_data: true
+freeze_epochs: 10

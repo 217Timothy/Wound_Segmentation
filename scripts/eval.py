@@ -46,7 +46,7 @@ def get_args():
     # 其他設定
     parser.add_argument("--split", type=str, default="val",
                         help="要評估的清單 (test/val)")
-    parser.add_argument("--threshold", type=float, default=0.5,
+    parser.add_argument("--threshold", type=float, default=0.7,
                         help="二值化門檻")
     
     return parser.parse_args()
@@ -163,7 +163,7 @@ def main():
         precision_scores = []
         
         for i in tqdm(range(len(dataset)), desc=f"Evaluating {ds}"):
-            img_tensor, mask_tensor = dataset[i]
+            img_tensor, mask_tensor, _ = dataset[i]
             
             # A. 推論 (Prediction)
             pred_mask = infer_one_image(
