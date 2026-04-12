@@ -1,6 +1,9 @@
-version: "v3"
-run_name: "run3-2"
+version: "wound-finetune-v1"
+run_name: "run1"
 datasets:
   - "WoundSeg"
   - "CO2Wound"
   - "FootUlcer"
+  - "Abrasion"
+  - "Cut"
+  - "Laceration"

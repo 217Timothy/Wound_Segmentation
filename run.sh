@@ -30,12 +30,12 @@ echo "========================================================"
 # ========================================================
 # Step 1. Plot Training Curves
 # ========================================================
-echo ""
-echo "🌟 [Step 1] Visualizing Training Logs..."
-echo "--------------------------------------------------------"
-python scripts/visualize.py \
-    --version "$VERSION" \
-    --run_name "$RUN_NAME"
+# echo ""
+# echo "🌟 [Step 1] Visualizing Training Logs..."
+# echo "--------------------------------------------------------"
+# python scripts/visualize.py \
+#     --version "$VERSION" \
+#     --run_name "$RUN_NAME"
 
 # ========================================================
 # Step 2. Run Prediction

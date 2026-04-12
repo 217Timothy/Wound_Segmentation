@@ -94,6 +94,14 @@ def build_model(version):
             classes=1
         ).to(DEVICE)
 
+    elif version == "wound-finetune-v1":
+        return EfficientUnet(
+            encoder_name="efficientnet-b3",
+            encoder_weights=None,
+            decoder_attention_type="scse",
+            classes=1
+        ).to(DEVICE)
+
     else:
         raise ValueError("Unsupported version")
 
@@ -194,8 +202,8 @@ def main():
         input_dir = os.path.join(args.in_root, ds)
 
         pred_dir = os.path.join(args.out_root, "predictions", args.version, args.run_name, ds)
-        overlay_dir = os.path.join(args.out_root, "overlay", ds)
-        combine_dir = os.path.join(args.out_root, "combine", ds)
+        overlay_dir = os.path.join(args.out_root, "visualizations", args.version, args.run_name, "overlay", ds)
+        combine_dir = os.path.join(args.out_root, "visualizations", args.version, args.run_name, "combine", ds)
 
         if args.delete:
             shutil.rmtree(pred_dir, ignore_errors=True)

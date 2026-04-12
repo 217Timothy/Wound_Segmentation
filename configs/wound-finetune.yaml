@@ -3,7 +3,7 @@
 # =========================
 version: wound-finetune-v1
 run_name: run1
-datasets: [DFU, Cut, Laceration]
+datasets: [DFU, Cut, Laceration, Abrasion, Chronic]
 
 # =========================
 # Finetune
