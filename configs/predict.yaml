@@ -1,12 +1,12 @@
 version: v3
-run_name: wound-finetune-run1
-datasets: ["Abrasions", "Burns", "Cut", "Laceration", "Stab_wound"]
+run_name: run3-1
+datasets: ["CO2Wound", "WoundSeg", "FootUlcer", "Abrasion", "Cut", "Laceration"]
 
-in_root: data_raw/Wound_dataset
+in_root: data_raw/
 out_root: results
 split: test
 
-input_mode: flat
+input_mode: standard
 
 threshold: 0.5
 delete: 1

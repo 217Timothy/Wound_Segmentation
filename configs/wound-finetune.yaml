@@ -16,7 +16,7 @@ num_workers: 4
 # Optimizer
 # =========================
 lr: 5e-5 # 🔥 finetune 必須低
-loss_name: focal_tversky
+loss_name: bce_dice
 
 # =========================
 # Finetune

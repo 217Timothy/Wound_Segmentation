@@ -189,12 +189,12 @@ def build_loss(name):
 # ==========================================
 # Optimizer
 # ==========================================
-def build_optimizer(model, lr):
-    return optim.AdamW([
-        {"params": model.model.encoder.parameters(), "lr": lr * 0.1},
-        {"params": model.model.decoder.parameters(), "lr": lr},
-        {"params": model.model.segmentation_head.parameters(), "lr": lr},
-    ], weight_decay=1e-4)
+# def build_optimizer(model, lr):
+#     return optim.AdamW([
+#         {"params": model.model.encoder.parameters(), "lr": lr * 0.1},
+#         {"params": model.model.decoder.parameters(), "lr": lr},
+#         {"params": model.model.segmentation_head.parameters(), "lr": lr},
+#     ], weight_decay=1e-4)
 
 
 # ==========================================
@@ -302,7 +302,11 @@ def main():
     model = build_model(args.version)
     loss_func = build_loss(args.loss_name)
 
-    optimizer = build_optimizer(model, args.lr)
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=1e-4
+    )
 
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
@@ -378,7 +382,11 @@ def main():
             unfreeze_encoder(model)
             encoder_unfrozen = True
 
-            optimizer = build_optimizer(model, lr=args.lr)
+            optimizer = optim.AdamW(
+                model.parameters(),
+                lr=args.lr,
+                weight_decay=1e-4
+            )
 
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
                 optimizer=optimizer,
