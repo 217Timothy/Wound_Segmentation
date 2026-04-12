@@ -19,21 +19,17 @@ DATASET_MAP = {
     "FootUlcer": "DFU",
     "CO2Wound": "Chronic",
     "Abrasion": "Abrasion",
-    # 之後可加
-    # "Cut": "Cut",
-    # "Laceration": "Laceration"
+    "Cut": "Cut",
+    "Laceration": "Laceration"
 }
 
 
 # ==========================================
-# Letterbox Resize
+# Resize
 # ==========================================
 def letterbox_resize(img, size, is_mask=False):
     h, w = size
     ih, iw = img.shape[:2]
-
-    if ih == h and iw == w:
-        return img
 
     scale = min(w / iw, h / ih)
     nw, nh = int(iw * scale), int(ih * scale)
@@ -60,7 +56,7 @@ def letterbox_resize(img, size, is_mask=False):
 # ==========================================
 # 處理 dataset
 # ==========================================
-def process_dataset(img_dir, mask_dir):
+def process_dataset(img_dir, mask_dir, prefix):
 
     img_paths = []
     for ext in ['*.jpg', '*.jpeg', '*.png']:
@@ -69,7 +65,8 @@ def process_dataset(img_dir, mask_dir):
     img_paths = sorted(img_paths)
     data = []
 
-    for img_path in tqdm(img_paths):
+    for idx, img_path in enumerate(tqdm(img_paths)):
+
         fname = os.path.basename(img_path)
         basename = os.path.splitext(fname)[0]
 
@@ -108,8 +105,11 @@ def process_dataset(img_dir, mask_dir):
         img = letterbox_resize(img, TARGET_SIZE)
         mask = letterbox_resize(mask, TARGET_SIZE, True)
 
+        # 🔥 重新命名（避免重複）
+        new_name = f"{prefix}_{idx:05d}.png"
+
         data.append({
-            "name": fname,   # 🔥 保留原始檔名
+            "name": new_name,
             "img": img,
             "mask": mask
         })
@@ -149,35 +149,61 @@ def save_data(data_list, out_dir):
 # ==========================================
 def main():
 
-    # ⚠️ 清空舊資料（小心）
     if os.path.exists(OUT_ROOT):
         print(f"🗑️ Removing old {OUT_ROOT}")
         shutil.rmtree(OUT_ROOT)
 
+    # ==========================================
+    # 🔥 先分群（很重要）
+    # ==========================================
+    grouped_data = {}
+
     for raw_name, new_name in DATASET_MAP.items():
 
-        print(f"\n🚀 {raw_name} → {new_name}")
+        print(f"\n🚀 Processing {raw_name} → {new_name}")
 
         img_dir = os.path.join(RAW_ROOT, raw_name, "images")
         mask_dir = os.path.join(RAW_ROOT, raw_name, "masks")
 
         if not os.path.exists(img_dir):
-            print("❌ Skip (no folder)")
+            print("❌ Skip")
             continue
 
-        data = process_dataset(img_dir, mask_dir)
+        data = process_dataset(img_dir, mask_dir, raw_name)  # ⚠️ 用 raw_name 當 prefix
 
-        if len(data) == 0:
-            print("❌ No valid data")
-            continue
+        if new_name not in grouped_data:
+            grouped_data[new_name] = []
 
-        # split (固定 random seed 很重要)
+        grouped_data[new_name].extend(data)
+
+    # ==========================================
+    # 🔥 再統一處理（merge後）
+    # ==========================================
+    for dataset_name, data in grouped_data.items():
+
+        print(f"\n📦 Building {dataset_name} (Total: {len(data)})")
+
+        # 🔥 重新命名（避免衝突）
+        for idx, item in enumerate(data):
+            item["name"] = f"{dataset_name}_{idx:05d}.png"
+
+        # split
         train, val = train_test_split(data, test_size=0.2, random_state=42)
 
-        out_base = os.path.join(OUT_ROOT, new_name)
+        out_base = os.path.join(OUT_ROOT, dataset_name)
 
         t_names = save_data(train, os.path.join(out_base, "train"))
         v_names = save_data(val, os.path.join(out_base, "val"))
+
+        # split txt
+        split_dir = os.path.join(OUT_ROOT, "splits", dataset_name)
+        os.makedirs(split_dir, exist_ok=True)
+
+        with open(os.path.join(split_dir, "train.txt"), "w") as f:
+            f.write("\n".join(t_names))
+
+        with open(os.path.join(split_dir, "val.txt"), "w") as f:
+            f.write("\n".join(v_names))
 
         print(f"✅ Train: {len(t_names)} | Val: {len(v_names)}")
 

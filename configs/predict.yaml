@@ -1,5 +1,5 @@
 version: v3
-run_name: wound_base
+run_name: wound-finetune-run1
 datasets: ["Abrasions", "Burns", "Cut", "Laceration", "Stab_wound"]
 
 in_root: data_raw/Wound_dataset

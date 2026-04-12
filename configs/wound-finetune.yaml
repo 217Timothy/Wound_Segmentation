@@ -2,8 +2,8 @@
 # Basic
 # =========================
 version: v3
-run_name: finetune_dfu_chronic_abrasion
-datasets: [DFU, Chronic, Abrasion]
+run_name: wound-finetune-run2
+datasets: [DFU, Chronic, Abrasion, "Cut", "Laceration"]
 
 # =========================
 # Training
@@ -15,7 +15,7 @@ num_workers: 4
 # =========================
 # Optimizer
 # =========================
-lr: 5e-4 # 🔥 finetune 必須低
+lr: 5e-5 # 🔥 finetune 必須低
 loss_name: focal_tversky
 
 # =========================
