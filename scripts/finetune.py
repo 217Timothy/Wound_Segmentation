@@ -250,6 +250,15 @@ def main():
         print(f"\nEpoch {epoch}")
         print(f"Global Dice: {global_dice:.4f}")
         print(f"Mean Per-Dataset Dice: {mean_dice:.4f}")
+        print("\n📊 Per-Dataset Results:")
+        for ds, metrics in per_ds.items():
+            print(
+                f"{ds} → "
+                f"Dice: {metrics['dice']:.4f} | "
+                f"IoU: {metrics['iou']:.4f} | "
+                f"Recall: {metrics['recall']:.4f} | "
+                f"Precision: {metrics['precision']:.4f}"
+    )
 
         # ==========================================
         # 存 checkpoint（用 mean）
