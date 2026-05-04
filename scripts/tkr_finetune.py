@@ -1,8 +1,13 @@
 import os
+import sys
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.amp.grad_scaler import GradScaler
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(current_dir)
+sys.path.append(root_dir)
 
 from src.engine import train_one_epoch, validate
 from src.utils.checkpoint import save_checkpoint
