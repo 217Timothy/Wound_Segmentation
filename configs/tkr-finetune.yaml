@@ -7,7 +7,7 @@ lr: 0.00005
 batch_size: 8
 num_workers: 8
 
-pretrained_ckpt: checkpoints/v3/run3-1/best.pt
+pretrained_ckpt: checkpoints/v3/run3/best.pt
 freeze_encoder_epochs: 2
 grad_clip: 1.0
 cache_data: true
