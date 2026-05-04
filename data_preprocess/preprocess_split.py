@@ -9,9 +9,9 @@ from sklearn.model_selection import train_test_split
 
 
 RAW_ROOT = "data_raw"
-LABELED_ROOT = f"{RAW_ROOT}/labeled"
+LABELED_ROOT = f"{RAW_ROOT}"
 TEST_ROOT = f"{RAW_ROOT}/test"
-OUT_ROOT = "data"
+OUT_ROOT = "data_tkr"
 TARGET_SIZE = (512, 512)
 PREFIX_MAP = {
     "WoundSeg": "WS",
@@ -189,7 +189,7 @@ def main():
         print(f"🗑️  Cleaning up old data at: {OUT_ROOT} ...")
         shutil.rmtree(OUT_ROOT, ignore_errors=True) # 遞迴刪除整個資料夾
     
-    datasets = ["WoundSeg", "CO2Wound", "FootUlcer"]
+    datasets = ["TKR_Knee"]
     print(f"[INFO] Raw Root: {RAW_ROOT}")
     print(f"[INFO] Labeled Root: {LABELED_ROOT}")
     print(f"[INFO] Test Root: {TEST_ROOT}")

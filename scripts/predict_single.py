@@ -68,6 +68,14 @@ def build_model(version, run_name):
             decoder_attention_type="scse",
             classes=1
         ).to(DEVICE)
+    
+    elif version == "wound-finetune-v1":
+        model = EfficientUnet(
+            encoder_name="efficientnet-b3",
+            encoder_weights=None,
+            decoder_attention_type="scse",
+            classes=1
+        ).to(DEVICE)
 
     else:
         raise ValueError(f"Unsupported version: {version}")
