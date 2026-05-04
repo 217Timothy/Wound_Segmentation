@@ -9,6 +9,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
+from src.datasets.wound_dataset import SegmentationDataset
 from src.engine import train_one_epoch, validate
 from src.utils.checkpoint import save_checkpoint
 
@@ -17,7 +18,6 @@ from train import (
     get_args,
     build_model,
     build_loss,
-    build_dataset,
     freeze_encoder,
     unfreeze_encoder,
 )
@@ -48,6 +48,19 @@ def load_pretrained(model, path):
     model.load_state_dict(model_dict, strict=False)
 
     print(f"[TKR] Loaded {len(matched)} layers")
+
+
+# ==========================================
+# Dataset
+# ==========================================
+def build_dataset(dataset_names, split, transform, cache_data):
+    return SegmentationDataset(
+        root_dir=DATA_ROOT_DIR,
+        datasets=dataset_names,
+        split=split,
+        transform=transform,
+        cache_data=cache_data
+    )
 
 
 def main():
@@ -90,7 +103,7 @@ def main():
     # ==========================
     # Model
     # ==========================
-    model = build_model(args.version)
+    model = build_model("v3")
 
     # ==========================
     # Pretrained (finetune)
