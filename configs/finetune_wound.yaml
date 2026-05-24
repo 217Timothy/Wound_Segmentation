@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# Fine-tune the multi-class wound model.  Goal: >= 0.80 Dice for every class.
+# Run:  python scripts/finetune_wound.py --config configs/finetune_wound.yaml
+# ---------------------------------------------------------------------------
+
+version: wound-finetune-v1
+run_name: run1
+
+# data
+data_root: data/processed/wound
+datasets: [DFU, Chronic, Cut, Laceration, Abrasion]
+image_size: 512
+cache_data: true
+
+# model (must match the pretrained checkpoint's architecture)
+model: efficientunet
+encoder_name: efficientnet-b3
+attention: scse
+
+# transfer learning
+pretrained_ckpt: outputs/checkpoints/v3/run3-1/best.pt
+freeze_encoder_epochs: 10     # warm-up: train decoder only, then unfreeze
+
+# optimization
+epochs: 50
+lr: 0.00001
+batch_size: 4
+num_workers: 4
+loss_name: focal_tversky
+grad_clip: 1.0

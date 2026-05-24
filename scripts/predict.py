@@ -1,254 +1,133 @@
-import os
+#!/usr/bin/env python3
+"""Run inference on folders of images and save masks + visualizations.
+
+Input layout (per dataset):
+    <in_root>/<dataset>/images/*.png   (masks/ optional, used for GT overlay)
+
+Output layout:
+    <out_root>/predictions/<version>/<run_name>/<dataset>/*.png
+    <out_root>/visualizations/<version>/<run_name>/overlay|combine/<dataset>/*.png
+
+Example:
+    python scripts/predict.py --config configs/predict.yaml
+"""
+
 import sys
-import argparse
-import glob
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import cv2
-import numpy as np
-import torch
-import torch.nn as nn
-import yaml
-from tqdm import tqdm
-import shutil
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.dirname(current_dir)
-sys.path.append(root_dir)
+from woundseg.config import load_config
+from woundseg.data import get_val_transforms
+from woundseg.engine import infer_one_image, load_inference_model
+from woundseg.postprocess import postprocess_mask
+from woundseg.utils import get_device, make_combine, make_overlay, make_overlay_with_gt
 
-from src.models import UNet, ResUnet, EfficientUnet
-from src.engine import infer_one_image
-from src.utils import load_checkpoint, make_overlay, make_overlay_with_gt, make_combine
-from src.datasets import get_val_transforms
+PREDICT_DEFAULTS = {
+    "version": "exp",
+    "run_name": "run1",
+    "ckpt": None,                       # explicit checkpoint; overrides version/run_name
+    "datasets": [],
+    "in_root": "data/raw/segmentation",
+    "out_root": "outputs",
+    "image_size": 512,
+    "threshold": 0.5,
+    "postprocess": True,
+    "blur_kernel": 7,
+    "blur_sigma": 0.0,
+    "closing_kernel": 7,
+    "open_kernel": 0,
+    "min_area": 200,
+    "keep_largest": True,
+    # fallback architecture for legacy checkpoints without 'model_cfg'
+    "model": "efficientunet",
+    "encoder_name": "efficientnet-b3",
+    "attention": "scse",
+}
 
-
-# ==========================================
-# Global
-# ==========================================
-DEVICE = (
-    "cuda" if torch.cuda.is_available()
-    else "mps" if torch.backends.mps.is_available()
-    else "cpu"
-)
-IMAGE_SIZE = 512
-
-
-# ==========================================
-# Args
-# ==========================================
-def get_args():
-    parser = argparse.ArgumentParser(description="Inference")
-
-    parser.add_argument("--config", type=str, default=None)
-    parser.add_argument("--version", type=str)
-    parser.add_argument("--run_name", type=str)
-    parser.add_argument("--datasets", type=str, nargs="+")
-    parser.add_argument("--in_root", type=str, default="data_raw")
-    parser.add_argument("--out_root", type=str, default="results")
-
-    parser.add_argument("--threshold", type=float, default=0.5)
-    parser.add_argument("--delete", type=int, default=1)
-
-    # postprocess
-    parser.add_argument("--use_postprocess", type=int, default=1)
-    parser.add_argument("--min_area", type=int, default=200)
-    parser.add_argument("--closing_kernel", type=int, default=7)
-    parser.add_argument("--dilate_iter", type=int, default=0)
-    parser.add_argument("--blur_kernel", type=int, default=7)
-    parser.add_argument("--blur_sigma", type=float, default=0)
-    parser.add_argument("--open_kernel", type=int, default=0)
-
-    args = parser.parse_args()
-
-    # load yaml
-    if args.config and os.path.exists(args.config):
-        print(f"[INFO] Loading config: {args.config}")
-        with open(args.config, "r") as f:
-            cfg = yaml.safe_load(f)
-        for k, v in cfg.items():
-            setattr(args, k, v)
-
-    return args
+_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp")
 
 
-# ==========================================
-# Model
-# ==========================================
-def build_model(version):
-    print("[INFO] Initializing Model...")
-
-    if version == "v1":
-        return UNet(3, 1).to(DEVICE)
-
-    elif version == "v2":
-        return ResUnet(
-            encoder_name="resnet50",
-            encoder_weights=None,
-            decoder_attention_type="scse",
-            classes=1
-        ).to(DEVICE)
-
-    elif version == "v3":
-        return EfficientUnet(
-            encoder_name="efficientnet-b3",
-            encoder_weights=None,
-            decoder_attention_type="scse",
-            classes=1
-        ).to(DEVICE)
-
-    elif version == "wound-finetune-v1":
-        return EfficientUnet(
-            encoder_name="efficientnet-b3",
-            encoder_weights=None,
-            decoder_attention_type="scse",
-            classes=1
-        ).to(DEVICE)
-
-    else:
-        raise ValueError("Unsupported version")
+def collect_images(dataset_dir: Path) -> list[Path]:
+    """Return sorted image paths from <dataset_dir>/images or <dataset_dir>."""
+    search = dataset_dir / "images"
+    if not search.is_dir():
+        search = dataset_dir
+    return sorted(p for p in search.iterdir()
+                  if p.suffix.lower() in _IMAGE_EXTS)
 
 
-# ==========================================
-# Collect images
-# ==========================================
-def collect_image_paths(input_dir):
-    img_dir = os.path.join(input_dir, "images")
-
-    if not os.path.exists(img_dir):
-        raise ValueError(f"{img_dir} not found")
-
-    extensions = [
-        "*.jpg", "*.jpeg", "*.png", "*.bmp", "*.heic",
-        "*.JPG", "*.JPEG", "*.PNG", "*.BMP", "*.HEIC"
-    ]
-
-    img_paths = []
-    for ext in extensions:
-        img_paths.extend(glob.glob(os.path.join(img_dir, ext)))
-
-    return sorted(img_paths)
-
-
-# ==========================================
-# Find GT mask
-# ==========================================
-def find_gt_mask(input_dir, name_no_ext):
-    mask_dir = os.path.join(input_dir, "masks")
-
-    for ext in [".png", ".jpg", ".jpeg", ".bmp"]:
-        path = os.path.join(mask_dir, name_no_ext + ext)
-        if os.path.exists(path):
-            m = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+def find_gt_mask(dataset_dir: Path, stem: str, size: int):
+    """Look for a matching ground-truth mask; return it resized or None."""
+    mask_dir = dataset_dir / "masks"
+    for ext in _IMAGE_EXTS:
+        path = mask_dir / f"{stem}{ext}"
+        if path.exists():
+            m = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
             if m is not None:
-                m = cv2.resize(m, (IMAGE_SIZE, IMAGE_SIZE), interpolation=cv2.INTER_NEAREST)
-                return (m > 0).astype(np.uint8) * 255
+                return cv2.resize(m, (size, size), interpolation=cv2.INTER_NEAREST)
     return None
 
 
-# ==========================================
-# Postprocess
-# ==========================================
-def postprocess_mask(mask, args):
-    mask = (mask * 255).astype(np.uint8)
-
-    if args.blur_kernel > 1:
-        k = args.blur_kernel if args.blur_kernel % 2 else args.blur_kernel + 1
-        mask = cv2.GaussianBlur(mask, (k, k), args.blur_sigma)
-
-    _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
-
-    if args.closing_kernel > 0:
-        k = args.closing_kernel if args.closing_kernel % 2 else args.closing_kernel + 1
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-
-    if args.open_kernel > 0:
-        k = args.open_kernel if args.open_kernel % 2 else args.open_kernel + 1
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-
-    if args.dilate_iter > 0:
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        mask = cv2.dilate(mask, kernel, iterations=args.dilate_iter)
-
-    num, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8) # type: ignore
-
-    cleaned = np.zeros_like(mask)
-
-    for i in range(1, num):
-        if stats[i, cv2.CC_STAT_AREA] >= args.min_area:
-            cleaned[labels == i] = 255
-
-    return (cleaned > 0).astype(np.uint8)
-
-
-# ==========================================
-# Main
-# ==========================================
 def main():
-    args = get_args()
+    cfg = load_config(PREDICT_DEFAULTS)
+    if not cfg.datasets:
+        raise SystemExit("No datasets given. Set 'datasets' in the config or pass --datasets.")
 
-    ckpt = os.path.join("checkpoints", args.version, args.run_name, "best.pt")
+    device = get_device()
+    out_root = Path(cfg.out_root)
+    ckpt_path = Path(cfg.ckpt) if cfg.ckpt else (
+        out_root / "checkpoints" / cfg.version / cfg.run_name / "best.pt")
+    if not ckpt_path.exists():
+        raise SystemExit(f"Checkpoint not found: {ckpt_path}")
 
-    print(f"[INFO] Using checkpoint: {ckpt}")
+    fallback = {"model": cfg.model, "encoder_name": cfg.encoder_name,
+                "attention": cfg.attention, "classes": 1}
+    model, _ = load_inference_model(ckpt_path, device, fallback_cfg=fallback)
+    print(f"[predict] device={device}  checkpoint={ckpt_path}")
 
-    model = build_model(args.version)
-    load_checkpoint(ckpt, model)
-    model.eval()
+    size = cfg.image_size
+    transform = get_val_transforms((size, size))
+    pp_kwargs = dict(blur_kernel=cfg.blur_kernel, blur_sigma=cfg.blur_sigma,
+                     closing_kernel=cfg.closing_kernel, open_kernel=cfg.open_kernel,
+                     min_area=cfg.min_area, keep_largest=cfg.keep_largest)
 
-    transform = get_val_transforms((IMAGE_SIZE, IMAGE_SIZE))
+    for ds in cfg.datasets:
+        dataset_dir = Path(cfg.in_root) / ds
+        images = collect_images(dataset_dir)
+        print(f"[predict] {ds}: {len(images)} images")
 
-    for ds in args.datasets:
-        print(f"\n[INFO] Dataset: {ds}")
+        pred_dir = out_root / "predictions" / cfg.version / cfg.run_name / ds
+        overlay_dir = out_root / "visualizations" / cfg.version / cfg.run_name / "overlay" / ds
+        combine_dir = out_root / "visualizations" / cfg.version / cfg.run_name / "combine" / ds
+        for d in (pred_dir, overlay_dir, combine_dir):
+            d.mkdir(parents=True, exist_ok=True)
 
-        input_dir = os.path.join(args.in_root, ds)
+        for img_path in images:
+            bgr = cv2.imread(str(img_path))
+            if bgr is None:
+                print(f"[predict][warn] unreadable image: {img_path}")
+                continue
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
-        pred_dir = os.path.join(args.out_root, "predictions", args.version, args.run_name, ds)
-        overlay_dir = os.path.join(args.out_root, "visualizations", args.version, args.run_name, "overlay", ds)
-        combine_dir = os.path.join(args.out_root, "visualizations", args.version, args.run_name, "combine", ds)
+            tensor = transform(image=rgb)["image"]
+            pred = infer_one_image(model, tensor, device, cfg.threshold)
+            if cfg.postprocess:
+                pred = postprocess_mask(pred, **pp_kwargs)
 
-        if args.delete:
-            shutil.rmtree(pred_dir, ignore_errors=True)
-            shutil.rmtree(overlay_dir, ignore_errors=True)
-            shutil.rmtree(combine_dir, ignore_errors=True)
+            stem = img_path.stem
+            cv2.imwrite(str(pred_dir / f"{stem}.png"), pred * 255)
 
-        os.makedirs(pred_dir, exist_ok=True)
-        os.makedirs(overlay_dir, exist_ok=True)
-        os.makedirs(combine_dir, exist_ok=True)
+            vis = cv2.resize(bgr, (size, size))
+            gt = find_gt_mask(dataset_dir, stem, size)
+            overlay = (make_overlay_with_gt(vis, pred, gt) if gt is not None
+                       else make_overlay(vis, pred))
+            cv2.imwrite(str(overlay_dir / f"{stem}.png"), overlay)
+            cv2.imwrite(str(combine_dir / f"{stem}.png"), make_combine(vis, pred, gt))
 
-        img_paths = collect_image_paths(input_dir)
-
-        print(f"[INFO] Found {len(img_paths)} images")
-
-        for img_path in tqdm(img_paths):
-            name = os.path.splitext(os.path.basename(img_path))[0]
-
-            img = cv2.imread(img_path)
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # type: ignore
-            img_resized = cv2.resize(img_rgb, (IMAGE_SIZE, IMAGE_SIZE))
-
-            gt = find_gt_mask(input_dir, name)
-
-            tensor = transform(image=img_rgb)["image"]
-
-            pred = infer_one_image(model, tensor, DEVICE, args.threshold).squeeze()
-
-            if args.use_postprocess:
-                pred = postprocess_mask(pred, args)
-
-            cv2.imwrite(os.path.join(pred_dir, f"{name}.png"), pred * 255)
-
-            img_vis = cv2.cvtColor(img_resized, cv2.COLOR_RGB2BGR)
-
-            if gt is not None:
-                overlay = make_overlay_with_gt(img_vis, pred, gt)
-            else:
-                overlay = make_overlay(img_vis, pred)
-
-            combine = make_combine(img_vis, pred)
-
-            cv2.imwrite(os.path.join(overlay_dir, f"{name}.png"), overlay)
-            cv2.imwrite(os.path.join(combine_dir, f"{name}.png"), combine)
-
-    print("\n✅ Done!")
+    print("[predict] done.")
 
 
 if __name__ == "__main__":

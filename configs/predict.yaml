@@ -1,20 +1,23 @@
-version: v3
-run_name: run3-1
-datasets: ["CO2Wound", "WoundSeg", "FootUlcer", "Abrasion", "Cut", "Laceration"]
+# ---------------------------------------------------------------------------
+# Batch inference on folders of images.
+# Run:  python scripts/predict.py --config configs/predict.yaml
+# ---------------------------------------------------------------------------
 
-in_root: data_raw/
-out_root: results
-split: test
+# which checkpoint: outputs/checkpoints/<version>/<run_name>/best.pt
+# (or set 'ckpt' to an explicit path)
+version: wound-finetune-v1
+run_name: run1
 
-input_mode: standard
+datasets: [abrasion, chronic, cut, dfu, laceration]
+in_root: data/raw/multiclass
+out_root: outputs
 
 threshold: 0.5
-delete: 1
 
-use_postprocess: 1
+# morphological clean-up of the predicted masks
+postprocess: true
+blur_kernel: 9
+closing_kernel: 9
+open_kernel: 5
 min_area: 200
-closing_kernel: 7
-dilate_iter: 0
-blur_kernel: 7
-blur_sigma: 0
-open_kernel: 0
+keep_largest: true

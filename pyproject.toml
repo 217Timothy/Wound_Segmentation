@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "woundseg"
+version = "1.0.0"
+description = "Multi-class wound segmentation: training, fine-tuning and inference."
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["woundseg*"]
+
+# Install the library in editable mode so `import woundseg` works anywhere:
+#     pip install -e .

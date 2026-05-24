@@ -1,25 +1,16 @@
-# core
+# --- core ---
 numpy
 pandas
-opencv-python
-tqdm
-pillow
 scikit-learn
 matplotlib
+tqdm
+pyyaml
+pillow
+pillow-heif            # HEIC support for tools/convert_heic_to_jpg.py
 
-# pytorch (Apple Silicon friendly)
+# --- vision / models ---
+opencv-python
 torch
 torchvision
-torchaudio
-segmentation_models_pytorch
-
-# dataset / augmentation
+segmentation-models-pytorch
 albumentations
-
-# config & utils
-pyyaml
-
-# Web Server
-fastapi
-uvicorn
-python-multipart

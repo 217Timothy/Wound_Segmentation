@@ -1,142 +1,89 @@
-import os
-import sys
-import argparse
-import pandas as pd
-import matplotlib.pyplot as plt
+#!/usr/bin/env python3
+"""Plot training curves from a run's CSV log.
 
-current_root = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_root)
-sys.path.append(project_root)
+Reads outputs/logs/<version>/<run_name>.csv and saves a curves.png next to the
+run outputs.
+
+Example:
+    python scripts/visualize.py --version v3 --run_name run1
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import argparse
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import pandas as pd
+
 
 def get_args():
-    parser = argparse.ArgumentParser()
-    
-    # 必要參數：模型版本與資料集
-    parser.add_argument("--version", type=str, required=True,
-                        help="要使用的模型版本")
-    parser.add_argument("--run_name", type=str, required=True,
-                        help="第幾次跑")
-    
-    # 輸入與輸出根目錄
-    parser.add_argument("--in_root", type=str, default="data",
-                        help="輸入圖片的資料夾路徑")
-    parser.add_argument("--out_root", type=str, default="results/runs",
-                        help="輸出結果的根目錄")
-    
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--run_name", required=True)
+    parser.add_argument("--out_root", default="outputs")
     return parser.parse_args()
 
 
-def highlight_max(ax, x_data, y_data, color="lightcoral"):
-    max_val = y_data.max()
-    max_idx = y_data.idxmax()
-    max_epoch = x_data[max_idx]
-    
-    ax.scatter(max_epoch, max_val, color=color, s=120, zorder=5, edgecolors='white', linewidth=2)
-    
-    ax.annotate(f'Max: {max_val:.4f}\n(Epoch {max_epoch})', 
-                xy=(max_epoch, max_val), 
-                xytext=(max_epoch, max_val - (max_val * 0.1)), # 文字稍微往下移一點，避免擋住線
-                color='black',
-                fontsize=10,
-                fontweight='bold',
-                arrowprops=dict(facecolor="black", shrink=0.05, width=1, headwidth=8),
-                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", alpha=0.9))
-
-
-def highlight_min(ax, x_data, y_data, color="lightcoral"):
-    min_val = y_data.min()
-    min_idx = y_data.idxmin()
-    min_epoch = x_data[min_idx]
-    
-    ax.scatter(min_epoch, min_val, color=color, s=120, zorder=5, edgecolors='white', linewidth=2)
-    
-    ax.annotate(f'Min: {min_val:.4f}\n(Epoch {min_epoch})', 
-                xy=(min_epoch, min_val), 
-                xytext=(min_epoch, min_val + 0.1), # 文字稍微往下移一點，避免擋住線
-                color='black',
-                fontsize=10,
-                fontweight='bold',
-                arrowprops=dict(facecolor="black", shrink=0.05, width=1, headwidth=8),
+def _annotate_extreme(ax, x, y, kind="max"):
+    """Mark the best point on a curve."""
+    idx = y.idxmax() if kind == "max" else y.idxmin()
+    ax.scatter(x[idx], y[idx], s=110, color="crimson", zorder=5,
+               edgecolors="white", linewidth=2)
+    ax.annotate(f"{kind}: {y[idx]:.4f}\n(epoch {int(x[idx])})",
+                xy=(x[idx], y[idx]), fontsize=9, fontweight="bold",
                 bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", alpha=0.9))
 
 
 def main():
     args = get_args()
-    
-    out_fig_dir = os.path.join(args.out_root, args.version, args.run_name)
-    log_path = os.path.join("logs", args.version, f"{args.run_name}.csv")
-    if not os.path.exists(log_path):
-        print(f"[Error] 找不到 Log 檔案：{log_path}")
-        return
-    os.makedirs(out_fig_dir, exist_ok=True)
-    
-    print(f"[INFO] Reading log from: {log_path}")
-    try:
-        df = pd.read_csv(log_path)
-    except Exception as e:
-        print(f"[Error] 讀取 CSV 失敗: {e}")
-        return
-    
-    plt.style.use("ggplot")
-    fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize=(40, 6))
-    
+    out_root = Path(args.out_root)
+    log_path = out_root / "logs" / args.version / f"{args.run_name}.csv"
+    if not log_path.exists():
+        raise SystemExit(f"Log file not found: {log_path}")
+
+    df = pd.read_csv(log_path)
     epochs = df["epoch"]
-    
-    # 1. Val Dice Score Curve
-    ax1.plot(epochs, df["val_dice"], label="Val Dice", color="royalblue", linewidth=1, linestyle="-", marker="o")
-    ax1.set_title(f"Validation Dice per Epoch ({args.version} - {args.run_name})")
-    ax1.set_xlabel("Epoch")
-    ax1.set_ylabel("Dice")
-    ax1.legend()
-    ax1.grid(True)
-    
-    highlight_max(ax1, epochs, df["val_dice"])
-    
-    # 2. Val IoU Score Curve
-    ax2.plot(epochs, df["val_iou"], label="Val IoU", color="royalblue", linewidth=1, linestyle="-", marker="o")
-    ax2.set_title(f"Validation IoU per Epoch ({args.version} - {args.run_name})")
-    ax2.set_xlabel("Epoch")
-    ax2.set_ylabel("IoU")
-    ax2.legend()
-    ax2.grid(True)
-    
-    highlight_max(ax2, epochs, df["val_iou"])
-    
-    # 3. Val Recall Score Curve
-    ax3.plot(epochs, df["val_recall"], label="Val Recall", color="royalblue", linewidth=1, linestyle="-", marker="o")
-    ax3.set_title(f"Validation Recall per Epoch ({args.version} - {args.run_name})")
-    ax3.set_xlabel("Epoch")
-    ax3.set_ylabel("Recall")
-    ax3.legend()
-    ax3.grid(True)
-    
-    highlight_max(ax3, epochs, df["val_recall"])
-    
-    # 4. Val Precision Score Curve
-    ax4.plot(epochs, df["val_precision"], label="Val Recall", color="royalblue", linewidth=1, linestyle="-", marker="o")
-    ax4.set_title(f"Validation Precision per Epoch ({args.version} - {args.run_name})")
-    ax4.set_xlabel("Epoch")
-    ax4.set_ylabel("Precision")
-    ax4.legend()
-    ax4.grid(True)
-    
-    highlight_max(ax4, epochs, df["val_precision"])
-    
-    # 5. Loss Curve
-    ax5.plot(epochs, df["train_loss"], label="Train Loss", color="tab:orange", linewidth=2, linestyle="--")
-    ax5.plot(epochs, df["val_loss"], label="Val Loss", color="royalblue", linewidth=2, linestyle="-", marker="o", markersize=4)
-    ax5.set_title(f"Loss Curve ({args.version} - {args.run_name})")
-    ax5.set_xlabel("Epoch")
-    ax5.set_ylabel("Loss")
-    ax5.legend()
-    ax5.grid(True)
-    
-    highlight_min(ax5, epochs, df["val_loss"])
-    
-    
-    save_path = os.path.join(out_fig_dir, f"plot")
-    plt.savefig(save_path, dpi=300)
-    print(f"✅ Plot saved to: {save_path}")
+
+    panels = [
+        ("val_dice", "Validation Dice (micro)", "max"),
+        ("val_mean_dice", "Validation Mean Dice (per-class)", "max"),
+        ("val_iou", "Validation IoU", "max"),
+        ("val_loss", "Validation Loss", "min"),
+    ]
+    panels = [p for p in panels if p[0] in df.columns]
+
+    plt.style.use("ggplot")
+    fig, axes = plt.subplots(1, len(panels) + 1, figsize=(7 * (len(panels) + 1), 5))
+
+    for ax, (col, title, kind) in zip(axes, panels):
+        ax.plot(epochs, df[col], marker="o", markersize=3, color="royalblue")
+        _annotate_extreme(ax, epochs, df[col], kind)
+        ax.set_title(f"{title}\n({args.version}/{args.run_name})")
+        ax.set_xlabel("epoch")
+
+    loss_ax = axes[-1]
+    if "train_loss" in df.columns:
+        loss_ax.plot(epochs, df["train_loss"], marker="o", markersize=3,
+                     label="train", color="darkorange")
+    if "val_loss" in df.columns:
+        loss_ax.plot(epochs, df["val_loss"], marker="o", markersize=3,
+                     label="val", color="royalblue")
+    loss_ax.set_title("Train vs Val Loss")
+    loss_ax.set_xlabel("epoch")
+    loss_ax.legend()
+
+    fig.tight_layout()
+    out_dir = out_root / "runs" / args.version / args.run_name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "curves.png"
+    fig.savefig(out_path, dpi=130, bbox_inches="tight")
+    print(f"[visualize] saved {out_path}")
 
 
 if __name__ == "__main__":

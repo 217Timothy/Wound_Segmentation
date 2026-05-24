@@ -1,14 +1,28 @@
-version: v3
-run_name: run3-2
-datasets: ["WoundSeg", "CO2Wound", "FootUlcer"]
+# ---------------------------------------------------------------------------
+# General pre-training on the large segmentation datasets.
+# Run:  python scripts/train.py --config configs/train.yaml
+# ---------------------------------------------------------------------------
 
+# experiment identity -> outputs/{checkpoints,runs,logs}/<version>/<run_name>
+version: v3
+run_name: test
+
+# data
+data_root: data/processed/wound
+datasets: [DFU, Chronic, Cut, Laceration, Abrasion]
+image_size: 512
+cache_data: true
+
+# model
+model: efficientunet # unet | resunet | efficientunet
+encoder_name: efficientnet-b3
+encoder_weights: imagenet
+attention: scse # scse | null
+
+# optimization
 epochs: 100
 lr: 0.001
 batch_size: 8
 num_workers: 8
-
-pretrained_ckpt: null
-freeze_encoder_epochs: 0
+loss_name: focal_tversky # focal_tversky | bce_tversky | bce_dice | dice
 grad_clip: 1.0
-cache_data: true
-loss_name: focal_tversky

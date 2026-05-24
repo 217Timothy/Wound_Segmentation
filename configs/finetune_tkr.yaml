@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# Fine-tune on the TKR knee-wound dataset.
+# Run:  python scripts/finetune_tkr.py --config configs/finetune_tkr.yaml
+# ---------------------------------------------------------------------------
+
+version: tkr-finetune-v1
+run_name: run1
+
+# data
+data_root: data/processed/tkr
+datasets: [TKR_Knee]
+image_size: 512
+cache_data: true
+
+# model
+model: efficientunet
+encoder_name: efficientnet-b3
+attention: scse
+
+# transfer learning
+pretrained_ckpt: outputs/checkpoints/v3/run3-1/best.pt
+freeze_encoder_epochs: 2
+
+# optimization
+epochs: 50
+lr: 0.00005
+batch_size: 8
+num_workers: 8
+loss_name: bce_dice
+grad_clip: 1.0

@@ -1,0 +1,15 @@
+# ---------------------------------------------------------------------------
+# Evaluate a checkpoint and report per-class Dice / IoU.
+# Run:  python scripts/evaluate.py --config configs/evaluate.yaml
+# ---------------------------------------------------------------------------
+
+version: wound-finetune-v1
+run_name: run1
+
+data_root: data/processed/wound
+datasets: [DFU, Chronic, Cut, Laceration, Abrasion]
+split: val            # val | test | train
+
+threshold: 0.5
+target_dice: 0.80     # per-class Dice goal; classes below this are flagged
+num_workers: 4
