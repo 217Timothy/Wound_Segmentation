@@ -1,0 +1,92 @@
+# =============================================================================
+#  VM 指令速查表
+#  Segmentation: /Users/eeeee/Desktop/ITRI_Segmentation_Project
+#  Classification: /Users/eeeee/Desktop/ITRI_Classification_Project
+# =============================================================================
+
+# ── 變數設定（每次開新 terminal 先貼這段）─────────────────────────────────────
+
+KEY=~/.ssh/ncku.pem
+HOST=nckueuser@20.115.52.2
+LOCAL_SEG=/Users/eeeee/Desktop/ITRI_Segmentation_Project
+LOCAL_CLA=/Users/eeeee/Desktop/ITRI_Classification_Project
+REMOTE_SEG="$HOST:~/ncku_wound_timothy1/Wound_Segmentation"
+REMOTE_CLA="$HOST:~/ncku_wound_timothy1/Wound_Classification"
+SSH_OPT="ssh -i $KEY"
+RSYNC="rsync -avz --progress --partial -e \"ssh -i $KEY\""
+
+
+# ── 連線 ──────────────────────────────────────────────────────────────────────
+
+ssh -i $KEY $HOST
+
+# VM 上切換目錄
+cd ncku_wound_timothy1/Wound_Segmentation
+cd ncku_wound_timothy1/Wound_Classification
+
+
+# =============================================================================
+#  SEGMENTATION
+# =============================================================================
+
+# ── [SEG] 下載 outputs（checkpoint + log 一起）────────────────────────────────
+# 改 VERSION 跟 RUN 就好，例如: VERSION=wound-finetune-v1  RUN=run2
+
+VERSION=wound-finetune-v1  RUN=run2
+rsync -avz --progress --partial -e "ssh -i $KEY" \
+  $REMOTE_SEG/outputs/checkpoints/$VERSION/$RUN \
+  $LOCAL_SEG/outputs/checkpoints/$VERSION/
+
+rsync -avz --progress --partial -e "ssh -i $KEY" \
+  $REMOTE_SEG/outputs/logs/$VERSION/$RUN.csv \
+  $LOCAL_SEG/outputs/logs/$VERSION/
+
+# ── [SEG] 下載整個 version 的所有 run（一次全抓）─────────────────────────────
+
+VERSION=wound-finetune-v1
+rsync -avz --progress --partial -e "ssh -i $KEY" \
+  $REMOTE_SEG/outputs/checkpoints/$VERSION/ \
+  $LOCAL_SEG/outputs/checkpoints/$VERSION/
+
+rsync -avz --progress --partial -e "ssh -i $KEY" \
+  $REMOTE_SEG/outputs/logs/$VERSION/ \
+  $LOCAL_SEG/outputs/logs/$VERSION/
+
+# ── [SEG] 上傳 TKR_Knee 資料到 VM ────────────────────────────────────────────
+
+# processed 資料（train + val + splits 一起）
+rsync -avz --progress --partial -e "ssh -i $KEY" \
+  $LOCAL_SEG/data/processed/tkr/ \
+  $REMOTE_SEG/data/processed/tkr/
+
+# annotation raw（TKR）
+rsync -avz --progress --partial -e "ssh -i $KEY" \
+  /Users/eeeee/Desktop/annotation/TKR \
+  $REMOTE_SEG/data_tkr/
+
+# annotation raw（cgmhTKR）
+rsync -avz --progress --partial -e "ssh -i $KEY" \
+  /Users/eeeee/Desktop/annotation/cgmhTKR \
+  $REMOTE_SEG/
+
+# ── [SEG] 上傳全部 data（網路爛不建議）───────────────────────────────────────
+
+rsync -avz --progress --partial \
+  --exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' \
+  -e "ssh -i $KEY" \
+  $LOCAL_SEG/data/ \
+  $REMOTE_SEG/data/
+
+
+# =============================================================================
+#  CLASSIFICATION（未修改，原樣保留）
+# =============================================================================
+
+# ── [CLA] 下載 checkpoint ─────────────────────────────────────────────────────
+scp -ri ~/.ssh/ncku.pem nckueuser@20.115.52.2:~/ncku_wound_timothy1/Wound_Classification/checkpoints/v1/exp3 ~/Desktop
+
+# ── [CLA] 下載 log ────────────────────────────────────────────────────────────
+scp -ri ~/.ssh/ncku.pem nckueuser@20.115.52.2:~/ncku_wound_timothy1/Wound_Classification/logs/v1/exp3.csv ~/Desktop
+
+# ── [CLA] 上傳資料 ────────────────────────────────────────────────────────────
+rsync -avz --progress -e "ssh -i ~/.ssh/ncku.pem" /Users/eeeee/Desktop/ITRI_Classification_Project/data nckueuser@20.115.52.2:~/ncku_wound_timothy1/Wound_Classification/
