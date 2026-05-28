@@ -4,7 +4,7 @@
 # ---------------------------------------------------------------------------
 
 version: tkr-finetune-v1
-run_name: run2
+run_name: exp2
 
 # data
 data_root: data/processed/tkr
@@ -18,7 +18,7 @@ encoder_name: efficientnet-b3
 attention: scse
 
 # transfer learning
-pretrained_ckpt: outputs/checkpoints/v3/run3-1/best.pt
+pretrained_ckpt: outputs/checkpoints/tkr-finetune-v1/exp1/best.pt
 freeze_encoder_epochs: 5
 
 # optimization
