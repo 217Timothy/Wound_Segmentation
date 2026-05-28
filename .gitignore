@@ -9,8 +9,8 @@ __pycache__/
 .DS_Store
 
 # Datasets and generated outputs (large; keep out of version control)
-data/
-outputs/
+/data/
+/outputs/
 
 # Archived pre-refactor code
 _deprecated/
