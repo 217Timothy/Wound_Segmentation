@@ -5,11 +5,11 @@
 
 # which checkpoint: outputs/checkpoints/<version>/<run_name>/best.pt
 # (or set 'ckpt' to an explicit path)
-version: wound-finetune-v1
-run_name: run1
+version: tkr-finetune-v1
+run_name: exp2
 
-datasets: [abrasion, chronic, cut, dfu, laceration]
-in_root: data/raw/multiclass
+datasets: [TKR_Knee]
+in_root: data/raw/segmentation
 out_root: outputs
 
 threshold: 0.5

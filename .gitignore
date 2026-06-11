@@ -19,3 +19,14 @@ _deprecated/
 *.zip
 
 vm_commands_segmentation.txt
+
+/tkr_roi_output_structure/
+
+/Segmentation_Experience.xlsx
+
+*.jpg
+*.png
+*.docx
+*.pptx
+*.xlsx
+*.pdf

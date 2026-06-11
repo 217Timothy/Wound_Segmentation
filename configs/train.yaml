@@ -1,28 +1,21 @@
-# ---------------------------------------------------------------------------
-# General pre-training on the large segmentation datasets.
-# Run:  python scripts/train.py --config configs/train.yaml
-# ---------------------------------------------------------------------------
+version: tkr-finetune-v1
+run_name: exp_ablation_imagenet_only
 
-# experiment identity -> outputs/{checkpoints,runs,logs}/<version>/<run_name>
-version: v3
-run_name: test
-
-# data
-data_root: data/processed/wound
-datasets: [DFU, Chronic, Cut, Laceration, Abrasion]
+data_root: data/processed/tkr
+datasets: [TKR_Knee]
 image_size: 512
 cache_data: true
+augmentation: tkr # ← 跟原本實驗一致
 
-# model
-model: efficientunet # unet | resunet | efficientunet
+model: efficientunet
 encoder_name: efficientnet-b3
-encoder_weights: imagenet
-attention: scse # scse | null
+attention: scse
+encoder_weights: imagenet # ← 唯一不同的地方
 
-# optimization
-epochs: 100
-lr: 0.001
+freeze_encoder_epochs: 5 # 跟原本一致
+epochs: 50
+lr: 0.00005
 batch_size: 8
 num_workers: 8
-loss_name: focal_tversky # focal_tversky | bce_tversky | bce_dice | dice
+loss_name: bce_dice
 grad_clip: 1.0
