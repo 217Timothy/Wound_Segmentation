@@ -122,9 +122,6 @@ def run_training(cfg, epoch_callback=None) -> dict:
 
     arch = model_config(cfg)
     model = build_model(encoder_weights=cfg.encoder_weights, device=device, **arch)
-    if cfg.pretrained_ckpt:
-        load_weights_partial(cfg.pretrained_ckpt, model, map_location=device)
-
     loss_func = build_loss(cfg.loss_name)
     optimizer = optim.AdamW(model.parameters(), lr=cfg.lr,
                             weight_decay=cfg.weight_decay)
@@ -139,16 +136,18 @@ def run_training(cfg, epoch_callback=None) -> dict:
     save_config(cfg, run_dir / "config.yaml")
     logger = CSVLogger(out / "logs" / cfg.version / f"{cfg.run_name}.csv", _LOG_COLUMNS)
 
-    # -- resume (only for fresh training, never when fine-tuning) ----------
+    # -- resume / initialize weights ---------------------------------------
     start_epoch, best_score = 1, 0.0
     last_ckpt = ckpt_dir / "last.pt"
-    if cfg.resume and not cfg.pretrained_ckpt and last_ckpt.exists():
+    if cfg.resume and last_ckpt.exists():
         ckpt = load_checkpoint(last_ckpt, model, optimizer, scheduler,
                                map_location=device)
         start_epoch = ckpt["epoch"] + 1
         best_score = ckpt.get("metrics", {}).get(cfg.select_by, 0.0)
         print(f"[run] resumed at epoch {start_epoch} "
               f"(best {cfg.select_by}={best_score:.4f})")
+    elif cfg.pretrained_ckpt:
+        load_weights_partial(cfg.pretrained_ckpt, model, map_location=device)
 
     # -- optional encoder freezing -----------------------------------------
     encoder_frozen = False

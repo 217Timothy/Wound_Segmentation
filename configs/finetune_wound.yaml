@@ -36,5 +36,5 @@ seed: 42
 
 # checkpoint selection / output
 select_by: mean_dice
-resume: false
+resume: true
 out_root: outputs
