@@ -1,17 +1,9 @@
+import argparse
 import os
 import cv2
 import numpy as np
 import glob
 import random
-from tqdm import tqdm
-
-# ===========================
-# 設定區
-# ===========================
-PROCESSED_ROOT = "data/processed/wound"
-OUTPUT_ROOT = "outputs/sanity_check"
-os.makedirs(os.path.join(OUTPUT_ROOT), exist_ok=True)
-SAMPLES_NUM = 8
 
 def overlay_image(img, mask, color=(0, 255, 0), alpha=0.5):
     """
@@ -33,23 +25,38 @@ def overlay_image(img, mask, color=(0, 255, 0), alpha=0.5):
     return overlay
 
 
-def verify_dataset():
+def discover_datasets(processed_root):
+    split_root = os.path.join(processed_root, "splits")
+    if not os.path.exists(split_root):
+        return []
+    return sorted(
+        name
+        for name in os.listdir(split_root)
+        if os.path.isdir(os.path.join(split_root, name))
+    )
+
+
+def verify_dataset(processed_root, output_root, datasets, samples_num, seed):
+
+    random.seed(seed)
+    os.makedirs(output_root, exist_ok=True)
     
-    if not os.path.exists(PROCESSED_ROOT):
-        print(f"❌ 找不到 {PROCESSED_ROOT}，請先執行前處理！")
+    if not os.path.exists(processed_root):
+        print(f"❌ 找不到 {processed_root}，請先執行前處理！")
         return
     
-    datasets = ["WoundSeg", "CO2Wound", "FootUlcer", "TKR"]
+    if not datasets:
+        datasets = discover_datasets(processed_root)
     splits = ["train", "val"]
     
     for ds in datasets:
         for split in splits:
             print(f"🔍 Checking {ds} - {split} ...")
             
-            img_dir = os.path.join(PROCESSED_ROOT, ds, split, "images")
-            mask_dir = os.path.join(PROCESSED_ROOT, ds, split, "masks")
+            img_dir = os.path.join(processed_root, ds, split, "images")
+            mask_dir = os.path.join(processed_root, ds, split, "masks")
             
-            out_dir = os.path.join(OUTPUT_ROOT, ds, split)
+            out_dir = os.path.join(output_root, ds, split)
             os.makedirs(out_dir, exist_ok=True)
             
             all_images = glob.glob(os.path.join(img_dir, "*.png"))
@@ -58,7 +65,7 @@ def verify_dataset():
                 continue
             
             # 隨機抽取 N 張
-            sample_images = random.sample(all_images, min(len(all_images), SAMPLES_NUM))
+            sample_images = random.sample(all_images, min(len(all_images), samples_num))
             for img_path in sample_images:
                 fname = os.path.basename(img_path)
                 mask_path = os.path.join(mask_dir, fname)
@@ -78,8 +85,25 @@ def verify_dataset():
                 save_path = os.path.join(out_dir, f"check_{fname}")
                 cv2.imwrite(save_path, combine)
     
-    print(f"\n✅ 檢查完成！請去打開資料夾查看圖片：\n   📂 {OUTPUT_ROOT}")
+    print(f"\n✅ 檢查完成！請去打開資料夾查看圖片：\n   📂 {output_root}")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Create image/mask/overlay sanity checks.")
+    parser.add_argument("--processed-root", default="data/processed/wound_clean")
+    parser.add_argument("--output-root", default="outputs/sanity_check")
+    parser.add_argument("--datasets", nargs="+", default=None)
+    parser.add_argument("--samples", type=int, default=8)
+    parser.add_argument("--seed", type=int, default=42)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    verify_dataset()
+    args = parse_args()
+    verify_dataset(
+        processed_root=args.processed_root,
+        output_root=args.output_root,
+        datasets=args.datasets,
+        samples_num=args.samples,
+        seed=args.seed,
+    )

@@ -42,6 +42,7 @@ BASE_DEFAULTS = {
     "datasets": [],
     "image_size": 512,
     "cache_data": False,
+    "skip_empty_masks": False,      # drop samples whose mask has no foreground
     "augmentation": "default",      # "default" | "tkr"
 
     # model

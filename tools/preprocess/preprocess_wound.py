@@ -15,13 +15,14 @@ OUT_ROOT = "data/processed/wound"
 TARGET_SIZE = (512, 512)
 
 DATASET_MAP = {
-    "WoundSeg": "DFU",
-    "FootUlcer": "DFU",
-    "CO2Wound": "Chronic",
-    "Abrasion": "Abrasion",
-    "Cut": "Cut",
-    "Laceration": "Laceration"
+    "footulcer": "footulcer",
+    "CO2Wound": "chronic",
+    "abrasion": "abrasion",
+    "cut": "cut",
+    "laceration": "laceration"
 }
+# Keep footulcer_tissue and chronic_bbox out of this default boundary pipeline:
+# their labels are tissue classes / bbox rectangles, not precise binary wound masks.
 
 
 # ==========================================

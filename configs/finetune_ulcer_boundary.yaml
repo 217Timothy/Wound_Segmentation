@@ -1,0 +1,32 @@
+# ---------------------------------------------------------------------------
+# Fine-tune a clean ulcer/foot-ulcer boundary model.
+# Run after:
+#   python tools/preprocess/prepare_chronic_wound_sources.py --overwrite
+#   python tools/preprocess/preprocess_wound_clean.py --overwrite
+# ---------------------------------------------------------------------------
+
+version: ulcer-boundary-v1
+run_name: footulcer_clean_run1
+
+data_root: data/processed/wound_clean
+datasets: [footulcer]
+image_size: 512
+cache_data: true
+augmentation: default
+
+model: efficientunet
+encoder_name: efficientnet-b3
+attention: scse
+encoder_weights: null
+
+pretrained_ckpt: outputs/checkpoints/v3/run3-1/best.pt
+freeze_encoder_epochs: 5
+
+epochs: 50
+lr: 0.00001
+batch_size: 4
+num_workers: 4
+loss_name: focal_tversky
+grad_clip: 1.0
+select_by: dice
+resume: false

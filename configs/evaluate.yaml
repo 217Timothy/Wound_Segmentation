@@ -4,11 +4,11 @@
 # ---------------------------------------------------------------------------
 
 version: tkr-finetune-v1
-run_name: exp2
+run_name: exp_ablation_imagenet_only
 
 data_root: data/processed/tkr
 datasets: [TKR_Knee]
-split: val # val | test | train
+split: test # val | test | train
 
 threshold: 0.5
 target_dice: 0.80 # per-class Dice goal; classes below this are flagged

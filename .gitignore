@@ -3,30 +3,121 @@ __pycache__/
 *.py[cod]
 .venv/
 *.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 
 # Editor / OS
 .vscode/
 .DS_Store
+.idea/
 
 # Datasets and generated outputs (large; keep out of version control)
 /data/
+/ChronicWoundDataset/
 /outputs/
+/checkpoints/
+/runs/
+/logs/
+/predictions/
+/visualizations/
 
 # Archived pre-refactor code
 _deprecated/
 
-# Misc
-*.zip
+# Secrets / credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*[sS]ecret*
+*[cC]redential*
+*[tT]oken*
+*[pP]assword*
 
+# ITRI / restricted / confidential material
+*ITRI*
+*itri*
+*工研*
+*工研院*
+*限閱*
+*機密*
+*保密*
+*[cC]onfidential*
+*[rR]estricted*
+*[pP]roprietary*
+*[iI]nternal*
+NDA*
+*_NDA*
+*-NDA*
+* NDA*
+
+# Experiment artifacts / model weights
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.engine
+*.tflite
+*.mlmodel
+*.h5
+*.keras
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.joblib
+
+# Local databases / tables / exports
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+*.feather
+*.csv
+*.tsv
+
+# Documents, reports, slides, and media
+reports/
+*report*/
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.xls
+*.xlsx
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tif
+*.tiff
+*.heic
+*.mp4
+*.mov
+*.avi
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# Misc local-only files
 vm_commands_segmentation.txt
 
 /tkr_roi_output_structure/
 
 /Segmentation_Experience.xlsx
 
-*.jpg
-*.png
-*.docx
-*.pptx
-*.xlsx
-*.pdf
+/docs
+
+delete_duplicates.sh
+duplicates_report.json
+
+ITRI_Project_Memory_Backup.md

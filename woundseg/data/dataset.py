@@ -26,14 +26,19 @@ class WoundSegmentationDataset(Dataset):
     """Image/mask pairs for one or more wound datasets."""
 
     def __init__(self, root_dir, datasets, split="train", transform=None,
-                 cache_data=False):
+                 cache_data=False, skip_empty_masks=False):
         self.root_dir = Path(root_dir)
         self.transform = transform
         self.cache_data = cache_data
+        self.skip_empty_masks = skip_empty_masks
+        self.skipped_empty_masks = 0
 
         self.samples = self._collect_samples(datasets, split)
         print(f"[dataset] {split}: {len(self.samples)} samples "
               f"-> {dict(Counter(s[2] for s in self.samples))}")
+        if self.skipped_empty_masks:
+            print(f"[dataset] {split}: skipped {self.skipped_empty_masks} "
+                  "empty-mask sample(s)")
 
         self._cache = self._build_cache(split) if cache_data else None
 
@@ -55,8 +60,17 @@ class WoundSegmentationDataset(Dataset):
                 img_path = base / "images" / fname
                 mask_path = base / "masks" / fname
                 if img_path.exists() and mask_path.exists():
+                    if self.skip_empty_masks and not self._mask_has_foreground(mask_path):
+                        self.skipped_empty_masks += 1
+                        continue
                     samples.append((img_path, mask_path, name))
         return samples
+
+    @staticmethod
+    def _mask_has_foreground(mask_path):
+        """Return True when a mask contains at least one positive pixel."""
+        mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+        return mask is not None and bool(np.any(mask > 0))
 
     def _build_cache(self, split):
         """Pre-load every image/mask into RAM; drop unreadable files."""

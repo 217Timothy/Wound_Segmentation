@@ -11,6 +11,7 @@ Behavior controlled by the config:
     select_by              metric used to decide the "best" checkpoint
 """
 
+import json
 from pathlib import Path
 
 import torch.optim as optim
@@ -54,10 +55,13 @@ def _build_loaders(cfg, device):
     train_tf = build_train_transforms(cfg.augmentation, img_size)
     val_tf = get_val_transforms(img_size)
 
-    train_ds = WoundSegmentationDataset(cfg.data_root, cfg.datasets, "train",
-                                        train_tf, cfg.cache_data)
-    val_ds = WoundSegmentationDataset(cfg.data_root, cfg.datasets, "val",
-                                      val_tf, cfg.cache_data)
+    skip_empty_masks = cfg.get("skip_empty_masks", False)
+    train_ds = WoundSegmentationDataset(
+        cfg.data_root, cfg.datasets, "train", train_tf, cfg.cache_data,
+        skip_empty_masks=skip_empty_masks)
+    val_ds = WoundSegmentationDataset(
+        cfg.data_root, cfg.datasets, "val", val_tf, cfg.cache_data,
+        skip_empty_masks=skip_empty_masks)
     if len(train_ds) == 0:
         raise RuntimeError(
             f"No training samples found in {cfg.data_root} for {cfg.datasets}.")
@@ -71,8 +75,45 @@ def _build_loaders(cfg, device):
     return train_loader, val_loader
 
 
-def run_training(cfg) -> Path:
-    """Train (or fine-tune) a model end to end. Returns the best checkpoint path."""
+def _clean_metrics(metrics: dict) -> dict:
+    """Convert metric values to plain JSON-friendly Python numbers."""
+    out = {}
+    for key, value in metrics.items():
+        if key == "per_dataset":
+            out[key] = {
+                ds: {m: float(v) for m, v in ds_metrics.items()}
+                for ds, ds_metrics in value.items()
+            }
+        elif key == "loss":
+            out["val_loss"] = float(value)
+        elif isinstance(value, (int, float)):
+            out[key] = float(value)
+    return out
+
+
+def _epoch_record(epoch: int, train_loss: float, val: dict, score: float,
+                  is_best: bool) -> dict:
+    return {
+        "epoch": int(epoch),
+        "train_loss": float(train_loss),
+        "score": float(score),
+        "is_best": bool(is_best),
+        **_clean_metrics(val),
+    }
+
+
+def _public_epoch_record(record: dict | None) -> dict | None:
+    if record is None:
+        return None
+    return {k: v for k, v in record.items() if k != "is_best"}
+
+
+def run_training(cfg, epoch_callback=None) -> dict:
+    """Train (or fine-tune) a model end to end. Returns a run summary dict.
+
+    epoch_callback (optional): 物件需有 .on_epoch_start() 和 .on_epoch_end(epoch, metrics)。
+        傳 None 時行為跟原本完全一樣，給計時/監控用。
+    """
     seed_everything(cfg.seed)
     device = get_device()
     print(f"[run] device={device}  version={cfg.version}  run={cfg.run_name}")
@@ -118,7 +159,13 @@ def run_training(cfg) -> Path:
                   f"{cfg.freeze_encoder_epochs} epoch(s)")
 
     # -- training loop ------------------------------------------------------
+    history = []
+    best_record = None
+    final_record = None
     for epoch in range(start_epoch, cfg.epochs + 1):
+        if epoch_callback is not None:
+            epoch_callback.on_epoch_start()
+
         if encoder_frozen and epoch > cfg.freeze_encoder_epochs:
             set_encoder_trainable(model, True)
             encoder_frozen = False
@@ -143,13 +190,21 @@ def run_training(cfg) -> Path:
             best_score = score
             print(f"[run] new best {cfg.select_by}={best_score:.4f}")
 
+        record = _epoch_record(epoch, train_loss, val, score, is_best)
+        history.append(record)
+        final_record = record
+        if is_best:
+            best_record = record
+
         save_checkpoint({
             "epoch": epoch,
             "state_dict": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(),
             "metrics": {"dice": val["dice"], "mean_dice": val["mean_dice"],
-                        "iou": val["iou"], "loss": val["loss"]},
+                        "iou": val["iou"], "recall": val["recall"],
+                        "precision": val["precision"], "loss": val["loss"],
+                        "per_dataset": val["per_dataset"]},
             "model_cfg": arch,
         }, is_best, ckpt_dir)
 
@@ -164,7 +219,29 @@ def run_training(cfg) -> Path:
             "val_precision": round(val["precision"], 6),
         })
 
+        if epoch_callback is not None:
+            epoch_callback.on_epoch_end(epoch, {
+                "train_loss": train_loss,
+                "val_loss": val["loss"],
+                "val_dice": val["dice"],
+                "val_mean_dice": val["mean_dice"],
+            })
+
     best_path = ckpt_dir / "best.pt"
     print(f"\n[run] finished. best {cfg.select_by}={best_score:.4f}")
     print(f"[run] best checkpoint: {best_path}")
-    return best_path
+    result = {
+        "version": cfg.version,
+        "run_name": cfg.run_name,
+        "select_by": cfg.select_by,
+        "best_checkpoint": str(best_path),
+        "best_epoch": best_record["epoch"] if best_record else None,
+        "best_score": float(best_score),
+        "best_metrics": _public_epoch_record(best_record),
+        "final_metrics": _public_epoch_record(final_record),
+        "history": history,
+    }
+    metrics_path = run_dir / "training_metrics.json"
+    metrics_path.write_text(json.dumps(result, indent=2, ensure_ascii=False))
+    print(f"[run] training metrics: {metrics_path}")
+    return result

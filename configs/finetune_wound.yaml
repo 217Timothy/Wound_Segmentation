@@ -3,18 +3,20 @@
 # Run:  python scripts/finetune_wound.py --config configs/finetune_wound.yaml
 # ---------------------------------------------------------------------------
 
-version: wound-finetune-v1
-run_name: run3
+version: wound-finetune-v2
+run_name: 20260630_0127_multiclass_skip_empty
 
 # data
 data_root: data/processed/wound
-datasets: [DFU, Chronic, Cut, Laceration, Abrasion]
+datasets: [footulcer, chronic, cut, laceration, abrasion]
 image_size: 512
 cache_data: true
+skip_empty_masks: true
 
 # model (must match the pretrained checkpoint's architecture)
 model: efficientunet
 encoder_name: efficientnet-b3
+encoder_weights: null
 attention: scse
 
 # transfer learning
@@ -24,7 +26,15 @@ freeze_encoder_epochs: 10     # warm-up: train decoder only, then unfreeze
 # optimization
 epochs: 50
 lr: 0.00001
+weight_decay: 0.0001
 batch_size: 4
 num_workers: 4
 loss_name: focal_tversky
 grad_clip: 1.0
+amp: true
+seed: 42
+
+# checkpoint selection / output
+select_by: mean_dice
+resume: false
+out_root: outputs

@@ -6,7 +6,7 @@
 # which checkpoint: outputs/checkpoints/<version>/<run_name>/best.pt
 # (or set 'ckpt' to an explicit path)
 version: tkr-finetune-v1
-run_name: exp2
+run_name: exp_ablation_imagenet_only
 
 datasets: [TKR_Knee]
 in_root: data/raw/segmentation

@@ -3,6 +3,10 @@
 ImageNet normalization is used because the encoders are ImageNet-pretrained.
 """
 
+import os
+
+os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
+
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 

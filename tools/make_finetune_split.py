@@ -18,11 +18,11 @@ SPLIT_ROOT = "data/processed/wound/splits"
 
 # dataset -> number of training samples to keep (None = keep all)
 TARGET_NUM = {
-    "DFU": 50,
-    "Chronic": 50,
-    "Abrasion": None,
-    "Cut": None,
-    "Laceration": None,
+    "footulcer": 50,
+    "chronic": 50,
+    "abrasion": None,
+    "cut": None,
+    "laceration": None,
 }
 
 
